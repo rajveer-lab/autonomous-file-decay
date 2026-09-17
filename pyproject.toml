@@ -1,0 +1,16 @@
+[project]
+name = "autonomous-file-decay"
+version = "0.1.0"
+description = "A background daemon that tracks file activity and automatically compresses, archives, quarantines, and deletes stale files based on configurable rules -- with a safety net to undo any action."
+requires-python = ">=3.11"
+readme = "README.md"
+
+[project.scripts]
+filedecay = "filedecay.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["filedecay*"]
