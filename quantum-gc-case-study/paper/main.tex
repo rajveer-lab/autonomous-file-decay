@@ -1,0 +1,601 @@
+\documentclass[conference]{IEEEtran}
+\IEEEoverridecommandlockouts
+
+\usepackage{cite}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{graphicx}
+\usepackage{textcomp}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{listings}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,fit,calc}
+\usepackage{url}
+\usepackage{array}
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+
+\newtheorem{theorem}{Theorem}
+\newtheorem{lemma}{Lemma}
+\newtheorem{proposition}{Proposition}
+\newtheorem{definition}{Definition}
+
+\newcommand{\QR}{\textup{\textsc{QReclaim}}}
+\newcommand{\Dep}{\mathit{Dep}}
+\newcommand{\Tr}{\mathit{Tr}}
+\newcommand{\Lst}{L^{*}}
+\newcommand{\instr}[1]{\texttt{#1}}
+\makeatletter
+\newcommand{\inputtable}[1]{\@@input #1 }  % expandable input, safe inside tabular
+\makeatother
+
+\lstdefinestyle{base}{basicstyle=\ttfamily\scriptsize, columns=fullflexible, keepspaces=true,
+  commentstyle=\color{black!55}\itshape, xleftmargin=0pt, aboveskip=2pt, belowskip=2pt,
+  showstringspaces=false}
+\lstdefinestyle{ir}{style=base, morecomment=[l]{;}}
+\lstdefinestyle{dsl}{style=base, language=Python, keywordstyle=\bfseries}
+
+\begin{document}
+
+\title{Memory Management and Garbage Collection Strategies in High-Level Quantum Programming Languages}
+
+\author{\IEEEauthorblockN{Rajveer Chopra}
+\IEEEauthorblockA{\textit{School of Computer Science and Engineering (SCOPE)}\\
+\textit{Vellore Institute of Technology}\\
+Vellore, Tamil Nadu, India\\
+rajveerchopra55@gmail.com}}
+
+\maketitle
+
+\begin{abstract}
+High-level quantum programming languages let programmers allocate temporary qubits as freely as local variables, but they leave the compiler a memory-management problem with no classical counterpart. By the no-cloning theorem a live qubit can be neither copied, nor inspected, nor silently dropped, so neither copying nor tracing garbage collection applies. This paper presents \QR{}, a compile-time garbage collector for qubits, built as a pass pipeline over a linear, gate-level intermediate representation (QR-IR). A linear type system rejects programs that would require cloning. A forward basis-state abstract interpretation computes, for every ancilla, its reversible computation trace, its dependency set and an uncomputation deadline, and an uncomputation-aware extension of live-variable analysis places every uncomputation at the earliest provably safe point. The same framework reclaims measured qubits by early measurement and reset, deletes ancillas that are never read (dead-garbage elimination), reorders gates to lower qubit pressure, and assigns physical qubits with an earliest-ready-first linear-scan allocator that exposes the width--depth trade-off as a single qubit budget. On five benchmark families (24 instances, up to 262 qubits), \QR{} reduces the number of physical qubits by 55.6\% on average (up to 98.4\%) relative to compilation without reuse, and by 42.3\% relative to lexical, scope-based reclamation; its depth-neutral mode still saves 36.2\% of the qubits with no increase in circuit depth. Semantic preservation was validated by exact simulation of 29 compiled programs with 609 run-time reclamation assertions, and compilation time grows linearly with program size.
+\end{abstract}
+
+\begin{IEEEkeywords}
+quantum compilers, uncomputation, qubit reuse, garbage collection, data-flow analysis, register allocation, no-cloning theorem
+\end{IEEEkeywords}
+
+%% =====================================================================
+\section{Introduction}
+\label{sec:intro}
+
+Current quantum processors offer tens to a few hundred noisy qubits, and fault-tolerant machines will spend most of their physical qubits on error correction. The number of logical qubits a program needs, its \emph{width}, therefore decides whether it can run at all, and reducing it is one of the most valuable things a quantum compiler can do. At the same time, quantum programming is moving away from hand-built circuits towards high-level languages such as Silq~\cite{silq}, Qrisp~\cite{qrisp} and Qurts~\cite{qurts}, in which the programmer allocates temporary qubits (\emph{ancillas}) the way a classical programmer declares local variables and expects the system to take them back. Returning qubits safely and early is the quantum analogue of memory management, and it is the subject of this case study.
+
+Classical garbage collection does not carry over. A copying collector moves live objects, but a quantum state cannot be copied~\cite{wootters1982}. A tracing collector inspects the heap at run time, but measuring a qubit disturbs it. Most importantly, a dead temporary is usually \emph{entangled} with live data. Discarding it decoheres the rest of the program and destroys the interference on which quantum algorithms depend. The only clean way to free such a qubit is to \emph{uncompute} it by running the gates that computed it in reverse~\cite{bennett1973}, which is valid only while the qubits it was computed from are unchanged. Mid-circuit measurement and reset offer a second mechanism for qubits whose value is no longer needed coherently~\cite{caqr,decross2023}. Memory management for qubits must therefore be done statically, by a compiler that understands both the program's data flow and its quantum semantics.
+
+This raises five compiler design challenges:
+\begin{enumerate}
+\item \emph{Safety (C1):} a qubit may be reclaimed only if this neither requires a copy nor leaves garbage entangled with live state.
+\item \emph{Placement (C2):} an uncomputation must happen after the ancilla's last use but before any of its inputs is overwritten, and ancillas computed from other ancillas extend each other's lifetimes.
+\item \emph{Unification (C3):} uncomputation-based and measurement-based reclamation should be decided in one framework rather than by separate tools.
+\item \emph{Allocation trade-off (C4):} reusing a qubit serialises computations that could otherwise run in parallel (a false dependency, exactly as in register allocation), so fewer qubits can mean deeper circuits.
+\item \emph{Cost (C5):} the analyses must be fast enough to run on every compilation.
+\end{enumerate}
+
+This paper addresses these challenges with \QR{}, whose contributions are:
+\begin{itemize}
+\item \textbf{QR-IR and a linear typing discipline} (\S\ref{sec:ir}--\ref{sec:types}) that enforces no-cloning statically and turns qubit reclamation into a type-preserving program transformation.
+\item \textbf{A basis-state abstract interpretation and an uncomputation-aware liveness analysis} (\S\ref{sec:analysis}), written as data-flow equations, with a legality condition whose soundness is argued in Theorem~\ref{thm:sound}.
+\item \textbf{A unified reclamation pass} (\S\ref{sec:reclaim}) covering uncomputation, early-measure-and-reset, dead-garbage elimination (DGE), and hierarchical reclamation of the helper qubits introduced when multi-controlled gates are lowered.
+\item \textbf{Pressure-aware scheduling and earliest-ready-first (ERF) linear-scan allocation} (\S\ref{sec:alloc}) with an explicit qubit budget, including a \emph{depth-neutral} mode.
+\item \textbf{A working prototype and an evaluation} (\S\ref{sec:impl}--\ref{sec:results}) on five program families, with every number regenerated by one script and every small instance verified by exact simulation.
+\end{itemize}
+
+%% =====================================================================
+\section{Literature Review}
+\label{sec:lit}
+
+\subsection{High-level languages and qubit lifetimes}
+Silq~\cite{silq} introduced \emph{safe automatic uncomputation}. Annotations such as \texttt{qfree} and \texttt{const} identify computations that can be reversed and inputs that stay unchanged, temporaries are uncomputed implicitly, and the type system rejects programs whose uncomputation would be unphysical. Qurts~\cite{qurts} carries Rust-style affine types with lifetimes over to quantum programs. Inside its lifetime a qubit may be discarded, and is then uncomputed automatically; outside it, it must be used linearly. Qrisp~\cite{qrisp} is a Python-embedded framework that compiles high-level programs down to circuits and supports automatic uncomputation and the reuse of deallocated qubits. These systems decide \emph{whether} a value can be uncomputed. The point at which it is reclaimed, however, follows the lexical structure of the program (a scope, a lifetime or a function exit).
+
+\subsection{Uncomputation synthesis and pebbling}
+Bennett's compute--copy--uncompute construction~\cite{bennett1973} is the basis of all uncomputation. Unqomp~\cite{unqomp} synthesises uncomputation automatically for the ancillas a programmer marks, working on a circuit-graph representation. Reqomp~\cite{reqomp} adds a space constraint and trades recomputation for ancillas, reducing their number by up to 96\%. SQUARE~\cite{square} decides at each modular call site whether to uncompute and reuse ancillas or keep the garbage, using a cost model that accounts for locality and parallelism. Meuli \emph{et al.}~\cite{meuli2019} cast qubit clean-up as a reversible pebbling game solved with SAT. Liu \emph{et al.}~\cite{liu2026} recently unified the uncomputation of clean and dirty ancillas and proved that deciding whether an uncomputation exists is coNP-hard. That result justifies the conservative, efficiently checkable analysis adopted here.
+
+\subsection{Qubit reuse with dynamic circuits}
+Mid-circuit measurement and reset allow a qubit to be reused once its final measurement has been taken. CaQR~\cite{caqr} builds a compiler pass around this capability and reports resource reductions of up to 80\%. DeCross \emph{et al.}~\cite{decross2023} formulate qubit-reuse compilation exactly as a constraint program, give a greedy heuristic, and run an 80-qubit QAOA circuit on a 20-qubit trapped-ion device.
+
+\subsection{Quantum IRs and classical compiler techniques}
+QIRO~\cite{qiro} gives quantum programs an SSA-based representation with value semantics, so that standard data-flow optimisations apply. McCaskey and Nguyen~\cite{mlirquantum} define an MLIR dialect that lowers quantum assembly to LLVM IR. On the classical side, linear-scan register allocation~\cite{linearscan} assigns registers to live intervals in a single pass. \QR{} transfers liveness analysis and linear scan to qubits. Two features have no classical counterpart: \emph{spilling} is impossible because there is no copy, and \emph{freeing} requires uncomputation or measurement.
+
+\subsection{Identified research gaps}
+Table~\ref{tab:lit} summarises the mechanisms. Four gaps motivate this work:
+\begin{enumerate}
+\item[\textbf{G1}] Uncomputation-based reuse~\cite{unqomp,reqomp,square} and measurement-based reuse~\cite{caqr,decross2023} are developed as separate techniques at different levels of abstraction. A program that needs both gets no unified treatment.
+\item[\textbf{G2}] Reclamation legality is stated as type rules~\cite{silq,qurts} or circuit-graph conditions~\cite{unqomp} rather than as data-flow facts that compose with the liveness, scheduling and allocation passes of a conventional compiler.
+\item[\textbf{G3}] Reuse creates false dependencies. Apart from space-constrained~\cite{reqomp} and cost-model-driven~\cite{square} approaches, the width--depth trade-off is rarely exposed as an explicit, user-visible knob, and simple qubit managers reuse in stack (LIFO) order.
+\item[\textbf{G4}] Where reclamation is lexical, its quality depends on how the programmer happens to nest scopes rather than on the program's actual data flow.
+\end{enumerate}
+
+\begin{table}[t]
+\caption{Qubit-reclamation mechanisms in related work}
+\label{tab:lit}
+\centering
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{@{}L{1.8cm}L{2.75cm}L{3.5cm}@{}}
+\toprule
+Work & Mechanism & Decision basis \\
+\midrule
+Silq~\cite{silq} & implicit uncomputation & type annotations; lexical scope \\
+Qurts~\cite{qurts} & implicit uncomputation & affine types with lifetimes \\
+Qrisp~\cite{qrisp} & uncomputation, recycling & high-level framework, Python-embedded \\
+Unqomp~\cite{unqomp} & uncomputation synthesis & circuit graph \\
+Reqomp~\cite{reqomp} & uncompute + recompute & circuit graph, ancilla budget \\
+SQUARE~\cite{square} & uncompute or keep & cost model at call sites \\
+Meuli~\cite{meuli2019} & clean-up strategy & reversible pebbling (SAT) \\
+CaQR~\cite{caqr} & measure + reset & circuit DAG, reuse pairs \\
+DeCross~\cite{decross2023} & measure + reset & constraint program / greedy \\
+\midrule
+\textbf{\QR{}} & uncompute, measure + reset, DGE & data-flow window, linear scan with budget \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+%% =====================================================================
+\section{Proposed Model / Architecture}
+\label{sec:model}
+
+\subsection{System overview}
+Fig.~\ref{fig:arch} shows the compilation pipeline. Programs are written in an embedded front end and translated to QR-IR, a linear list of instructions over \emph{logical} qubits. A linear type check enforces no-cloning (\S\ref{sec:types}). Two analyses then run over the high-level IR: a forward \emph{basis-state abstract interpretation} and a backward \emph{liveness} analysis (\S\ref{sec:analysis}). The \emph{level-1 reclamation pass} uses their results to insert uncomputations, early measurements, resets and \instr{free} instructions for programmer ancillas (\S\ref{sec:reclaim}). Multi-controlled gates are then lowered to Toffoli chains, and a \emph{level-2 reclamation pass} reclaims the helper qubits this creates. Finally, a pressure-aware scheduler reorders commuting instructions, an ERF linear-scan allocator maps logical to physical qubits under an optional budget (\S\ref{sec:alloc}), and code is emitted as a Qiskit circuit or OpenQASM~2. The type check runs again after scheduling, and a physical no-aliasing check after allocation.
+
+\begin{figure*}[t]
+\centering
+\begin{tikzpicture}[
+  node distance=3.2mm and 4.5mm,
+  st/.style={draw=black!70, rounded corners=2pt, align=center, font=\scriptsize,
+             minimum height=10mm, text width=26mm, inner sep=2pt},
+  fe/.style={st, fill=blue!7}, an/.style={st, fill=green!9},
+  tc/.style={st, fill=orange!12}, be/.style={st, fill=yellow!14},
+  arr/.style={-{Stealth[length=1.8mm]}, semithick},
+  note/.style={font=\scriptsize\itshape, text=black!65, align=center}]
+\node[fe] (fe) {\textbf{Front end}\\ embedded DSL: \texttt{qreg},\\ \texttt{ancilla}, gates, \texttt{scope}};
+\node[fe, right=of fe] (ir) {\textbf{QR-IR (high level)}\\ \texttt{x}/\texttt{z} with $k$ controls,\\ polarities, scope marks};
+\node[tc, right=of ir] (tc) {\textbf{Linear type check}\\ T-Gate, T-Use, T-Free\\ (no-cloning)};
+\node[an, right=of tc] (an) {\textbf{Analyses}\\ basis-state AI (fwd):\\ $\sigma,\Tr,\Dep,D$; liveness (bwd)};
+\node[an, right=of an] (r1) {\textbf{Reclamation L1}\\ $\Lst$ fixpoint, $U(a)$,\\ early meas., DGE};
+\node[an, below=8mm of r1] (lo) {\textbf{Lowering}\\ $k$-control gate $\to$\\ V-chain + helpers};
+\node[an, left=of lo] (r2) {\textbf{Reclamation L2}\\ helper qubits\\ (same pass)};
+\node[be, left=of r2] (sc) {\textbf{PALS scheduling}\\ sink \texttt{alloc}, hoist \texttt{free}\\ (pressure-aware)};
+\node[be, left=of sc] (al) {\textbf{Linear-scan alloc.}\\ ERF heap, two-pass,\\ budget $B$ / DN mode};
+\node[fe, left=of al] (cg) {\textbf{Code generation}\\ Qiskit circuit /\\ OpenQASM 2};
+\draw[arr] (fe) -- (ir);
+\draw[arr] (ir) -- (tc);
+\draw[arr] (tc) -- (an);
+\draw[arr] (an) -- (r1);
+\draw[arr] (r1) -- (lo);
+\draw[arr] (lo) -- (r2);
+\draw[arr] (r2) -- (sc);
+\draw[arr] (sc) -- (al);
+\draw[arr] (al) -- (cg);
+\node[note, below=2mm of sc, text width=160mm] {checks: linear type check after scheduling $\cdot$ physical no-aliasing check and dead-reset elimination after allocation $\cdot$ verification by exact simulation with GC assertions and Qiskit Aer};
+\node[note, above=0.8mm of an, text width=60mm] {data-flow facts drive every reclamation decision};
+\end{tikzpicture}
+\caption{Architecture of the \QR{} compilation pipeline. Green stages form the compile-time garbage collector; the same reclamation pass runs at two IR levels.}
+\label{fig:arch}
+\end{figure*}
+
+\subsection{Intermediate representation (QR-IR)}
+\label{sec:ir}
+A QR-IR program is a sequence $P=\iota_0\ldots\iota_{N-1}$ of
+\begin{align*}
+\iota ::=\;& \instr{alloc}\ q \mid \instr{free}\ q \mid g^{\theta}(\bar c^{\,\bar\pi};\bar t)\\
+ \mid\;& \instr{measure}\ q\to c \mid \instr{reset}\ q \mid \instr{end}\ s
+\end{align*}
+where $\bar c$ are control qubits with polarities $\pi\in\{+,-\}$ (a $-$ control fires on $|0\rangle$), $\bar t$ are targets, and $\theta$ are optional angles. CX, Toffoli and $k$-controlled X are all the base operation $\instr{x}$ with $|\bar c|=1,2,k$, which keeps the analyses uniform. Each qubit has a kind: \emph{data} (owned by the programmer), \emph{ancilla} (reclaimed by the compiler) or \emph{helper} (created by lowering). Base gates fall into three classes according to how they act on computational-basis states:
+\begin{itemize}
+\item $G_{\mathrm{qf}}=\{\instr{x},\instr{swap}\}$ \emph{permute} the basis (qfree in Silq's terminology~\cite{silq});
+\item $G_{\mathrm{dg}}=\{\instr{z},\instr{s},\instr{s}^\dagger,\instr{t},\instr{t}^\dagger,\instr{rz},\instr{p}\}$ are \emph{diagonal}: they only add phases;
+\item $G_{\mathrm{gen}}=\{\instr{h},\instr{rx},\instr{ry}\}$ can create superposition.
+\end{itemize}
+The \emph{write set} $W(\iota)$ contains the targets of $G_{\mathrm{qf}}\cup G_{\mathrm{gen}}$ gates and the target of \instr{reset}. These are exactly the instructions that can change a qubit's basis value, and controls and diagonal gates never write. Negative controls are kept symbolic until code generation, so the $X$ conjugation that implements them is never mistaken for a write.
+
+The embedded front end (Python) offers \texttt{qreg}, \texttt{ancilla}, gate methods and a \texttt{scope} context manager. Programmers write only the \emph{forward} computation and never uncompute or free anything by hand (Fig.~\ref{fig:example}a).
+
+\subsection{Static semantics: linear typing enforces no-cloning}
+\label{sec:types}
+Typing judgements $\Delta\vdash\iota\dashv\Delta'$ thread a context $\Delta$ that maps each live qubit to its abstract state (\S\ref{sec:ai}):
+\begin{gather*}
+\frac{q\notin\mathrm{dom}(\Delta)}{\Delta\vdash \instr{alloc}\ q\dashv \Delta,q{:}\mathbf{0}}\ \textsc{(T-Alloc)}
+\\[4pt]
+\frac{\Delta(q)=\mathbf{0}}{\Delta\vdash \instr{free}\ q\dashv \Delta\setminus q}\ \textsc{(T-Free)}\\[4pt]
+\frac{\bar c,\bar t\ \text{pairwise distinct}\qquad \{\bar c,\bar t\}\subseteq\mathrm{dom}(\Delta)}{\Delta\vdash g(\bar c;\bar t)\dashv \Delta[\bar t\mapsto \tau_g(\Delta,\bar c,\bar t)]}\ \textsc{(T-Gate)}
+\end{gather*}
+No rule duplicates a binding, and \textsc{T-Gate} requires distinct operands. A well-typed program can therefore never use two ``copies'' of one qubit, which is the static form of the no-cloning theorem~\cite{wootters1982}. Discharging \textsc{T-Free} requires a proof that $\Delta(q)=\mathbf{0}$, and such proofs are produced only by the reclamation pass, through Theorem~\ref{thm:sound} or Lemma~\ref{lem:meas}. The checker runs on the logical program and again after scheduling. After allocation, a physical variant verifies that no physical qubit ever hosts two live logical qubits.
+
+\subsection{Data-flow analyses}
+\label{sec:analysis}
+
+\subsubsection{Basis-state abstract interpretation (forward)}
+\label{sec:ai}
+Each qubit $q$ carries an abstract state $\sigma(q)$ from the lattice
+\[
+\mathbf{0}\ \sqsubseteq\ \mathbf{B}\ \sqsubseteq\ \mathbf{T},\qquad \mathbf{M}\ \sqsubseteq\ \mathbf{T},
+\]
+where $\mathbf{0}$ means exactly $|0\rangle$, $\mathbf{B}$ means a basis value that is a reversible function of other qubits, $\mathbf{M}$ means measured (collapsed), and $\mathbf{T}$ means possibly in superposition. It also carries a \emph{trace} $\Tr(q)$ (the qfree gates that computed it), a \emph{dependency set} $\Dep(q)$ (the controls those gates read) and a \emph{deadline} $D(q)$: the position of the first later instruction that writes some $d\in\Dep(q)$. Table~\ref{tab:transfer} gives the transfer functions. The analysis is a single forward sweep, because after inlining and unrolling a quantum program is one basic block. Each write clears the reverse map from the written qubit to its dependants, so the deadline bookkeeping costs amortised $O(1)$ per instruction.
+
+\begin{table}[t]
+\caption{Transfer functions of the basis-state analysis (instruction $\iota$ at position $i$)}
+\label{tab:transfer}
+\centering
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{@{}L{3.0cm}L{5.3cm}@{}}
+\toprule
+Instruction $\iota$ & Effect on the abstract facts \\
+\midrule
+\instr{alloc} $q$ & $\sigma(q){\gets}\mathbf{0}$;\ $\Tr(q){\gets}\epsilon$;\ $\Dep(q){\gets}\emptyset$;\ $D(q){\gets}\infty$ \\[2pt]
+$g(\bar c;t)$, $g\in G_{\mathrm{qf}}$, if $\sigma(t)\in\{\mathbf{0},\mathbf{B}\}$ and $D(t)=\infty$ & $\sigma(t){\gets}\mathbf{B}$;\ $\Tr(t){\gets}\Tr(t)\cdot\iota$;\ $\Dep(t){\gets}\Dep(t)\cup\bar c$ \\[2pt]
+otherwise, or $g\in G_{\mathrm{gen}}$ & $\sigma(t){\gets}\mathbf{T}$ for every target $t$ \\[2pt]
+$g\in G_{\mathrm{dg}}$ & no change (adds phases only) \\[2pt]
+\instr{measure} $q$ & $\sigma(q){\gets}\mathbf{M}$ \\[2pt]
+\instr{reset} $q$ & $\sigma(q){\gets}\mathbf{0}$;\ $\Tr(q){\gets}\epsilon$;\ $\Dep(q){\gets}\emptyset$ \\[2pt]
+any $\iota$, each $w\in W(\iota)$ & for all $a$ with $w\in\Dep(a)$ and $D(a)=\infty$: $D(a){\gets}i$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsubsection{Liveness (backward)}
+With $\mathit{DEF}(\iota)=\{q\}$ for $\instr{alloc}\ q$ and $\mathit{USE}(\iota)$ the operands of every other instruction, the classical live-variable equations apply unchanged:
+\begin{align}
+\mathit{LIVE}_{in}(\iota) &= \mathit{USE}(\iota)\cup\big(\mathit{LIVE}_{out}(\iota)\setminus \mathit{DEF}(\iota)\big),\label{eq:live1}\\
+\mathit{LIVE}_{out}(\iota) &= \textstyle\bigcup_{s\in succ(\iota)}\mathit{LIVE}_{in}(s),\label{eq:live2}\\
+L(q) &= \max\{\,i : q\in \mathit{USE}(\iota_i)\,\}.\label{eq:lastuse}
+\end{align}
+On straight-line code a single backward sweep solves (\ref{eq:live1})--(\ref{eq:live2}) and yields the last use $L(q)$ and the qubit pressure $|\mathit{LIVE}|$ at every point.
+
+\subsubsection{Uncomputation-aware liveness and placement}
+Inserting the uncomputation $U(a)$ of an ancilla $a$ at position $P(a)$ \emph{reads} every $d\in\Dep(a)$ again. The last use of a dependency is therefore not $L(d)$ but may be later. Let $R$ be the set of ancillas to uncompute. The effective last use is the least fixpoint of
+\begin{align}
+\Lst(q) &= \max\big(L(q),\ \max\{P(a): a\in R,\ q\in\Dep(a)\}\big),\label{eq:lstar}\\
+P_{\mathrm{eager}}(a) &= \Lst(a),\label{eq:eager}\\
+P_{\mathrm{lazy}}(a) &= \min\big(\mathit{end}(\mathit{scope}(a)),\ D(a){-}1,\nonumber\\
+ &\qquad\quad \min\{P_{\mathrm{lazy}}(b): b\in\Dep(a)\cap R\}\big),\label{eq:lazy}
+\end{align}
+and a placement is \emph{legal} iff
+\begin{equation}
+\Lst(a)\ \le\ P(a)\ <\ D(a)\qquad\text{for every } a\in R. \label{eq:legal}
+\end{equation}
+Equation~(\ref{eq:eager}) is \QR{}'s policy: reclaim as early as possible. Equation~(\ref{eq:lazy}) models lexical reclamation and serves as the SCOPE baseline. It is deliberately \emph{stronger} than a strict scope rule, because it moves an uncomputation before a deadline that falls inside the scope instead of rejecting the program. If (\ref{eq:legal}) fails for some $a$, the program is rejected with a diagnostic naming the instruction that overwrote $a$'s input (\S\ref{sec:diag}).
+
+The fixpoint is monotone over finite positions, so it terminates. Processing $R$ in reverse order of first computation follows a reverse topological order of the dependency DAG, and the fixpoint then usually stabilises after one sweep.
+
+\begin{theorem}[Sound uncomputation]\label{thm:sound}
+Let $\sigma(a)=\mathbf{B}$ at the end of $P$ and let $U(a)=\Tr(a)_k^{-1}\cdots\Tr(a)_1^{-1}$. Inserting $U(a);\ \instr{free}\ a$ after any position $p$ with $\Lst(a)\le p<D(a)$ leaves $a$ in $|0\rangle$, unentangled from the other qubits, and yields the same final state on all other qubits for every such $p$.
+\end{theorem}
+\begin{IEEEproof}[Proof sketch]
+Expand the state in the computational basis of $\Dep(a)$. Because $p<D(a)$, no instruction between the first trace gate and $p$ writes a dependency, so in each branch $|d\rangle$ the controls of every trace gate hold the same values when the gate executes and when it is reversed. Every other instruction touching $a$ only \emph{reads} it, as a control or through a diagonal gate; a write would have made $\sigma(a)=\mathbf{T}$. So in branch $|d\rangle$ the ancilla holds $f(d)$ from the end of its trace onwards, and $U(a)$ maps $|d\rangle|f(d)\rangle\mapsto|d\rangle|0\rangle$. By linearity the global state factorises as $|\psi\rangle\otimes|0\rangle_a$. For position independence, note that an instruction inside the window does not touch $a$ (because $p\ge\Lst(a)\ge L(a)$) and touches $\Dep(a)$ only as controls, through diagonal gates or by measurement (because $p<D(a)$). Such an instruction and $U(a)$ are both block-diagonal in the computational basis of $\Dep(a)$ and act on disjoint qubits within every block, so they commute.
+\end{IEEEproof}
+
+\begin{lemma}[Early measurement]\label{lem:meas}
+If the final operation on $q$ is $\instr{measure}\ q\to c$ at position $m$ and the previous use of $q$ is at $\ell<m$, moving the measurement to just after $\max(\ell,\max\{P(b):q\in\Dep(b)\})$ and following it with $\instr{reset}\ q;\ \instr{free}\ q$ preserves the joint distribution of all classical outcomes and the state of all other qubits.
+\end{lemma}
+\begin{IEEEproof}[Proof sketch]
+Between the new and the old position no instruction acts on $q$ except controlled operations of uncomputations that only read it. Measurement commutes with operations on disjoint qubits and with operations that use $q$ only as a control, so the outcome distribution is unchanged. The reset, a write, is ordered after every uncomputation that reads $q$.
+\end{IEEEproof}
+
+\subsection{Reclamation transformations}
+\label{sec:reclaim}
+Algorithm~\ref{alg:reclaim} summarises the pass. It is parameterised by the qubit kinds it manages, so the same code runs at both IR levels.
+
+\emph{Dead-garbage elimination (DGE).} An ancilla in state $\mathbf{0}$ or $\mathbf{B}$ whose only uses are its own trace gates is never read. Its computation and its uncomputation would cancel, so both are deleted together with the allocation. This removes, for example, the unused carry-out of an adder.
+
+\emph{Uncomputation insertion.} For every $a\in R$, the pass inserts $U(a)$ followed by $\instr{free}\ a$ after $\iota_{P(a)}$. The gates of $U(a)$ are the inverses of the trace in reverse order; for $G_{\mathrm{qf}}$ each gate is its own inverse.
+
+\emph{Measurement-based reclamation.} Lemma~\ref{lem:meas} is applied to every qubit (data or ancilla) whose final operation is a measurement.
+
+\emph{Ordering.} Several blocks may share an insertion point. A block that reads $q$ must precede the block that writes $q$; ties are broken in reverse allocation order, in the Bennett style. This is a topological sort over at most a handful of blocks.
+
+\emph{Diagnostics.} An ancilla that ends in $\mathbf{T}$ and is never measured cannot be reclaimed without leaving entangled garbage. It is reported statically instead of being silently leaked.
+
+\begin{algorithm}[t]
+\caption{\textsc{Reclaim}$(P,K,\mathit{mode})$}
+\label{alg:reclaim}
+\footnotesize
+\begin{algorithmic}[1]
+\Require program $P=\iota_0\ldots\iota_{N-1}$, managed kinds $K$
+\State $(\sigma,\Tr,\Dep,D)\gets\textsc{BasisAI}(P)$;\ \ $L\gets\textsc{Liveness}(P)$
+\State $G\gets\{a\in K:\sigma(a)\in\{\mathbf{0},\mathbf{B}\}\wedge \mathit{uses}(a)=\Tr(a)\}$ \Comment{DGE}
+\State delete $\Tr(a)$ and $\instr{alloc}\ a$ for every $a\in G$
+\If{$\exists a\in K\setminus G:\sigma(a)=\mathbf{T}$} \textbf{error} ``unreclaimable ancilla'' \EndIf
+\State $R\gets\{a\in K\setminus G:\sigma(a)=\mathbf{B}\}$
+\If{$\mathit{mode}=\textsc{eager}$}
+  \Repeat
+    \For{$a\in R$ in reverse order of first trace gate}
+      \State $P(a)\gets\max(L(a),\max\{P(b):b\in R,\ a\in\Dep(b)\})$
+    \EndFor
+  \Until{no $P(a)$ changed}
+\Else\ \ $P(a)\gets$ Eq.~(\ref{eq:lazy}) by memoised recursion
+\EndIf
+\ForAll{$a\in R$} \textbf{check} Eq.~(\ref{eq:legal}) \textbf{else error} \EndFor
+\ForAll{$q$ whose final operation is $\instr{measure}$ at $m$}
+  \State $p\gets\max(\max(\mathit{uses}(q)\setminus\{m\}),\ \max\{P(b):q\in\Dep(b)\})$
+  \State move $\iota_m$ after $\iota_p$; append $\instr{reset}\ q;\ \instr{free}\ q$
+\EndFor
+\ForAll{$a\in R$} insert $U(a);\ \instr{free}\ a$ after $\iota_{P(a)}$ \EndFor
+\State order blocks at equal points: readers of $q$ before writers of $q$
+\end{algorithmic}
+\end{algorithm}
+
+\emph{Hierarchical reclamation.} A gate with $k\ge3$ controls is lowered to a Barenco-style V-chain of $k{-}2$ helper qubits followed by one Toffoli or CCZ on the target. Lowering emits only the \emph{compute} half of the chain; the uncompute half is produced by running Algorithm~\ref{alg:reclaim} again with $K=\{\text{helper}\}$. Running level~1 \emph{before} lowering is essential. At level~1 a clause ancilla computed by a 3-controlled gate depends only on the three input qubits. After lowering it would also depend on the helper that carries the conjunction, and that dependency would keep the helper alive until the clause itself is uncomputed.
+
+\subsection{Scheduling and allocation}
+\label{sec:alloc}
+\emph{Pressure-aware list scheduling (PALS).} Gates on disjoint qubits commute, so any topological order of the per-qubit precedence DAG is equivalent to the input. PALS emits ready instructions with priority $\instr{free}\prec$ (gates, \instr{measure}, \instr{reset} in source order) $\prec\instr{alloc}$, and orders \instr{alloc}s by their qubit's first use. This sinks allocations and hoists reclamation, the program-level counterpart of the reuse pairs found by CaQR~\cite{caqr}. Bernstein--Vazirani, for example, turns into the qubit-sequential form that needs only two qubits.
+
+\emph{Earliest-ready-first linear scan.} After scheduling, every logical qubit occupies one interval $[\instr{alloc},\instr{free}]$, so the interference graph is an interval graph.
+
+\begin{proposition}\label{prop:opt}
+For a fixed instruction order, let $\omega=\max_i|A(i)|$, where $A(i)$ is the set of logical qubits allocated but not yet freed at position $i$. A linear-scan allocator that reuses a free physical qubit whenever one exists uses exactly $\omega$ physical qubits, which is the minimum possible. A second pass with budget $B=\omega$ that allocates fresh qubits first never fails.
+\end{proposition}
+\begin{IEEEproof}[Proof sketch]
+Interval graphs are perfect, and colouring intervals greedily in order of their left endpoints (the order in which linear scan~\cite{linearscan} visits them) uses exactly $\omega$ colours. In the second pass, at most $\omega-1$ other logical qubits are live at any allocation, so once all $\omega$ physical qubits exist at least one of them is free.
+\end{IEEEproof}
+
+Which free qubit to choose decides the depth cost of a reuse. Our allocator tracks the ASAP finishing time $\mathit{ready}[p]$ of every physical qubit. When it reuses, it takes the pooled qubit with the smallest $\mathit{ready}$ value (earliest-ready-first, ERF), which minimises the false dependency the reuse introduces. A pooled qubit executes no operations, so its key cannot change while it waits, and a binary heap gives $O(\log n)$ selection (Algorithm~\ref{alg:alloc}).
+
+\begin{algorithm}[t]
+\caption{\textsc{Allocate}$(P,B)$ (ERF linear scan)}
+\label{alg:alloc}
+\footnotesize
+\begin{algorithmic}[1]
+\State $\mathit{heap}\gets\emptyset$;\ $\mathit{ready}\gets[\,]$
+\ForAll{$\iota\in P$ in order}
+  \If{$\iota=\instr{alloc}\ q$}
+    \If{($B\neq\bot\wedge|\mathit{ready}|\ge B$) $\vee$ ($B=\bot\wedge\mathit{heap}\neq\emptyset$)}
+      \State $(\_,p)\gets\textsc{PopMin}(\mathit{heap})$ \Comment{earliest ready}
+    \Else\ \ $p\gets|\mathit{ready}|$;\ append $0$ to $\mathit{ready}$ \Comment{fresh}
+    \EndIf
+    \State $\phi(q)\gets p$
+  \ElsIf{$\iota=\instr{free}\ q$} \State $\textsc{Push}(\mathit{heap},(\mathit{ready}[\phi(q)],\phi(q)))$
+  \Else
+    \State $t\gets1+\max\{\mathit{ready}[\phi(q)]: q\in\mathit{ops}(\iota)\}$
+    \State $\mathit{ready}[\phi(q)]\gets t$ for every $q\in\mathit{ops}(\iota)$
+  \EndIf
+\EndFor
+\State \Return $\phi$ \Comment{two-pass: $B\gets$ width of \textsc{Allocate}$(P,\bot)$, rerun}
+\end{algorithmic}
+\end{algorithm}
+
+\emph{Budget and depth-neutral mode.} With a budget $B$ the allocator uses fresh qubits until $B$ exist and only then reuses. Two settings are of interest. \emph{\QR{}-min} uses $B=\omega$ (Proposition~\ref{prop:opt}). \emph{\QR{}-DN} (depth-neutral) bisects for the smallest $B$ whose circuit is no deeper than the no-reuse circuit. Afterwards, \emph{dead-reset elimination} removes resets on physical qubits that are never handed out again.
+
+\emph{Complexity.} With $N$ instructions of bounded arity, the analyses and the type checks are $O(N)$, the placement fixpoint is $O(h\cdot\sum_a|\Dep(a)|)$ for a dependency DAG of height $h$ (one sweep in practice), PALS and ERF allocation are $O(N\log N)$, and DN mode adds a factor of $\log_2 W_{\mathrm{NR}}$.
+
+\subsection{Worked example}
+Fig.~\ref{fig:example} compiles a two-term inner-product phase oracle. Under lexical reclamation both temporaries live until the end of the oracle's scope, which takes 6 qubits. \QR{} uncomputes $t_0$ immediately after its last use, hoists the final \texttt{h} and \texttt{measure} of $x_0,y_0$, and hands $t_0$'s physical qubit to $t_1$, which takes 5 qubits. At the scale of the HS benchmark this effect turns $3n$ qubits into $2n{+}1$.
+
+\begin{figure}[t]
+\centering
+\begin{minipage}{\columnwidth}
+\textbf{(a)} source (embedded DSL)
+\begin{lstlisting}[style=dsl]
+x = p.qreg("x", 2); y = p.qreg("y", 2)
+for q in x + y: p.h(q)
+with p.scope():                  # oracle (-1)^{x.y}
+    for i in range(2):
+        t = p.ancilla("t")       # never freed by hand
+        p.ccx(x[i], y[i], t); p.z(t)
+for q in x + y: p.h(q)
+for q in x + y: p.measure(q)
+\end{lstlisting}
+\end{minipage}\\[2pt]
+\begin{minipage}[t]{0.44\columnwidth}
+\textbf{(b)} SCOPE: 6 qubits
+\begin{lstlisting}[style=ir]
+alloc x0..y1     ; q0-q3
+h x0; h x1; h y0; h y1
+alloc t0         ; q4
+ccx x0,y0 -> t0
+z t0
+alloc t1         ; q5
+ccx x1,y1 -> t1
+z t1
+ccx x1,y1 -> t1  ; U(t1)
+free t1
+ccx x0,y0 -> t0  ; U(t0)
+free t0
+h x0; h x1; h y0; h y1
+measure x0, x1, y0, y1
+\end{lstlisting}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.54\columnwidth}
+\textbf{(c)} \QR{}: 5 qubits
+\begin{lstlisting}[style=ir]
+alloc x0..y1; h ...  ; q0-q3
+alloc t0             ; q4
+ccx x0,y0 -> t0
+z t0
+ccx x0,y0 -> t0      ; U(t0)
+free t0              ; q4 free
+h x0; measure x0     ; hoisted
+h y0; measure y0     ; hoisted
+alloc t1             ; q4 again
+ccx x1,y1 -> t1
+z t1
+ccx x1,y1 -> t1      ; U(t1)
+free t1
+h x1; measure x1
+h y1; measure y1
+\end{lstlisting}
+\end{minipage}
+\caption{Worked example. (a) Source code with two implicit temporaries. (b) Lexical reclamation keeps both until the end of the scope. (c) \QR{} reclaims $t_0$ at its last use and reuses its qubit for $t_1$. Listings (b) and (c) are actual compiler output, condensed.}
+\label{fig:example}
+\end{figure}
+
+%% =====================================================================
+\section{Implementation / Experimental Setup}
+\label{sec:impl}
+
+\subsection{Toolchain}
+\QR{} is implemented in about 1{,}400 lines of Python~3.13. There is one module per stage of Fig.~\ref{fig:arch}: the IR and front end, the type checker, the analyses, reclamation, lowering, scheduling, allocation, code generation, a simulator and the driver. Code generation targets Qiskit~2.5.2, which also lowers every compiled circuit to the $\{\mathrm{CX},U\}$ basis at optimisation level~1 so that gate counts and depths are reported on a common footing. Programs can be exported as OpenQASM~2, including mid-circuit \texttt{measure} and \texttt{reset}. Correctness is checked with a purpose-built exact simulator (NumPy, branching on mid-circuit measurements, so the output distribution is exact rather than sampled) and cross-checked with Qiskit Aer~0.17.2 at 8{,}192 shots. The simulator asserts on every \instr{alloc} and \instr{free} that the qubit is exactly $|0\rangle$, which checks at run time what reclamation guarantees statically. All experiments ran single-threaded on an Intel Xeon processor at 2.10\,GHz (4~vCPUs, Linux), and one script (\texttt{experiments/run\_all.py}) regenerates every table and figure. A pytest suite of 99 test cases covers all configurations and benchmarks.
+
+\subsection{Benchmarks}
+The five families in Table~\ref{tab:bench} are written in the high-level style the paper targets: temporaries are allocated freely and never uncomputed by hand, and each family stresses a different reclamation mechanism.
+
+\begin{table}[t]
+\caption{Benchmark families (24 instances in total)}
+\label{tab:bench}
+\centering
+\footnotesize
+\setlength{\tabcolsep}{2.5pt}
+\begin{tabular}{@{}lL{3.6cm}L{1.35cm}L{1.6cm}@{}}
+\toprule
+ID & Program & Sizes & Stresses \\
+\midrule
+BV & Bernstein--Vazirani, $n$-bit secret & $n{=}8..128$ & measured data \\
+HS & hidden shift, inner-product bent function on $2n$ bits; one temporary per product & $n{=}4..64$ & flat temporaries \\
+RC & repetition-code memory, distance $d$, $r{=}d$ rounds, fresh syndrome qubit per check & $d{=}3..11$ & mid-circuit measurement \\
+ADD & ripple-carry adder, carries in ancillas, unused carry-out & $n{=}4..64$ & dependency chains, DGE \\
+GRV & Grover search, planted 3-SAT, $n$ variables, $m{=}2n$ clauses, one ancilla per clause & $n{=}4..10$ & iterated oracles, lowering \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Configurations and metrics}
+Four configurations are compared, all running through the same front end, lowering and code generator:
+\begin{itemize}
+\item \textbf{NR} (no reuse): lazy placement and a fresh physical qubit for every allocation, i.e.\ correct uncomputation without any qubit reuse.
+\item \textbf{SCOPE}: lazy placement (Eq.~\ref{eq:lazy}) with stack (LIFO) reuse of reclaimed ancillas, an idealised model of lexical reclamation.
+\item \textbf{\QR{}-min}: eager placement, early measurement, DGE, PALS and two-pass ERF allocation.
+\item \textbf{\QR{}-DN}: the same pipeline under the smallest depth-neutral budget.
+\end{itemize}
+An ablation adds the components one at a time. Metrics are \emph{width} (physical qubits, the memory footprint), \emph{CX} and total $\{\mathrm{CX},U\}$ gate count (code size), \emph{depth} after lowering (a proxy for execution time), the number of mid-circuit \emph{resets}, and \emph{compile time} (wall clock, best of three).
+
+%% =====================================================================
+\section{Results \& Discussion}
+\label{sec:results}
+
+\subsection{Correctness}
+Table~\ref{tab:verify} lists the verification instances. Every compiled program whose width allowed exact simulation (29 of 30) reproduced the analytically expected output distribution: the BV secret, the hidden shift, the syndrome pattern of the injected error, $(a+b)\bmod 2^n$, and the closed-form Grover distribution $\sin^2((2k{+}1)\theta)$. The total variation distance (TVD) is at most $2.7\times10^{-15}$, i.e.\ floating-point round-off. All 609 run-time reclamation assertions held. Qiskit Aer agrees within sampling noise: TVD $0$ for the deterministic programs and at most $0.020$ for Grover at 8{,}192 shots.
+
+\begin{table}[t]
+\caption{Verification: width per configuration, reclamation assertions and TVD of \QR{}-min from the expected distribution}
+\label{tab:verify}
+\centering
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{@{}lrrrrrr@{}}
+\toprule
+ & \multicolumn{3}{c}{width} & GC & TVD & TVD \\
+\cmidrule(lr){2-4}
+Instance & NR & SCOPE & \QR{} & checks & exact & Aer \\
+\midrule
+\inputtable{tables/tab_verify.tex}
+\bottomrule
+\multicolumn{7}{@{}l}{\scriptsize $^\dagger$too wide for exact simulation; other configurations verified.}
+\end{tabular}
+\end{table}
+
+\subsection{Memory footprint}
+Fig.~\ref{fig:qubits} and Table~\ref{tab:main} report width. Averaged over all 24 instances, \QR{}-min uses 55.6\% fewer qubits than NR (geometric-mean width ratio $0.29$, i.e.\ $3.4\times$ fewer) and 42.3\% fewer than SCOPE. SCOPE itself saves 14.9\% over NR. The gains differ by mechanism:
+\begin{itemize}
+\item \emph{BV and RC} need early measurement plus scheduling. Their width collapses to $2$ and $d{+}1$ qubits independently of $n$ and of the number of rounds (98.4\% and 90.1\% at the largest sizes). Lexical reclamation cannot reuse measured qubits at all, so SCOPE equals NR.
+\item \emph{HS} profits from eager placement. All $n$ temporaries share one lexical scope, so SCOPE needs $3n$ qubits; eager reclamation needs $2n{+}1$, 32.8\% fewer than SCOPE and 49.6\% fewer than NR.
+\item \emph{GRV} profits from reuse across oracle calls, which SCOPE also exploits (82.1\% fewer qubits than NR at $n{=}10$).
+\item \emph{ADD} shows the limit of reclamation without recomputation. Carry $c_{i+1}$ is computed from $c_i$, so by Eq.~(\ref{eq:lstar}) $\Lst(c_i)\ge P(c_{i+1})$, and the carries form a chain that eager and lazy placement handle identically. The only gain is DGE removing the unused carry-out (one qubit). Notably, eager placement independently rediscovers the interleaving of carry uncomputation and sum computation used in textbook ripple-carry adders.
+\end{itemize}
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=\textwidth]{figures/fig_qubits.pdf}
+\caption{Physical qubits (log scale) versus problem size. SCOPE coincides with NR on BV and RC because lexical reclamation cannot reuse measured qubits; \QR{}-DN keeps the depth of NR.}
+\label{fig:qubits}
+\end{figure*}
+
+\begin{table*}[t]
+\caption{Main results at the largest size of each family (width reduction relative to NR in parentheses)}
+\label{tab:main}
+\centering
+\scriptsize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{@{}lrrrrrrrrrrrr@{}}
+\toprule
+ & \multicolumn{4}{c}{Width (physical qubits)} & \multicolumn{4}{c}{Depth} & \multicolumn{2}{c}{CX gates} & Resets & Compile \\
+\cmidrule(lr){2-5}\cmidrule(lr){6-9}\cmidrule(lr){10-11}
+Benchmark & NR & SCOPE & \QR{}-min & \QR{}-DN & NR & SCOPE & \QR{}-min & \QR{}-DN & NR & \QR{}-min & \QR{}-min & ms \\
+\midrule
+\inputtable{tables/tab_main.tex}
+\bottomrule
+\end{tabular}
+\end{table*}
+
+\subsection{Code size and depth}
+Reclamation itself adds no gates. Every configuration must uncompute its ancillas for correctness, so the uncomputation gates appear in NR as well, and the CX counts of \QR{} and NR are identical except where DGE fires (ADD: $-20.6\%$ CX at $n{=}4$, $-1.0\%$ at $n{=}64$). The extra operations of \QR{}-min are mid-circuit resets, one per reuse of a measured qubit. Width, however, is bought with depth. Reuse serialises work, and \QR{}-min is $3.1\times$ deeper than NR (geometric mean), up to $28.9\times$ for HS-64, whose single shared temporary forces all products to run one after another. The ERF heuristic matters here. On GRV, SCOPE's LIFO reuse inflates depth by 20--59\%, while \QR{}-min reaches the \emph{same} width with only 3--5\% extra depth (Table~\ref{tab:ablation}).
+
+\subsection{Width--depth trade-off}
+Fig.~\ref{fig:budget} sweeps the budget $B$ from the minimum width to the NR width. Depth falls steeply and reaches the NR depth at 33\% (BV), 51\% (GRV), 59\% (RC) and 75\% (HS) of the NR width, while the number of resets decreases linearly. \QR{}-DN selects this point automatically. With \emph{zero} depth overhead on every instance it saves 36.2\% of the qubits on average (90.7\% on BV-128, 81.3\% on GRV-10, 44.6\% on RC-11). On GRV it is even marginally shallower than NR ($-0.7\%$) and uses up to 36 fewer CX gates, because reuse places the closing \texttt{x} of one clause ancilla next to the opening \texttt{x} of the next on the same physical qubit, where Qiskit's peephole pass cancels them.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/fig_budget.pdf}
+\caption{Effect of the qubit budget $B$ (normalised by the NR width). Left: depth relative to NR. Right: mid-circuit resets.}
+\label{fig:budget}
+\end{figure}
+
+\subsection{Ablation}
+Table~\ref{tab:ablation} adds the components one at a time. Each mechanism is responsible for a different family: eager placement for HS ($48\to33$ qubits), early measurement for RC ($49\to8$), PALS for BV ($33\to2$), DGE for ADD ($48\to47$, $-22$ CX), and the allocator for depth (ERF and two-pass reduce GRV's depth from 1094 to 825 and HS's from 671 to 371 at unchanged width). No single classical technique reproduces the combined effect, which supports gap G1.
+
+\begin{table}[t]
+\caption{Ablation: width / depth as components are added (sizes as in Fig.~\ref{fig:budget}; ADD at $n{=}16$)}
+\label{tab:ablation}
+\centering
+\footnotesize
+\setlength{\tabcolsep}{2.5pt}
+\begin{tabular}{@{}lrrrrr@{}}
+\toprule
+Configuration & BV-32 & HS-16 & RC-7 & ADD-16 & GRV-8 \\
+\midrule
+\inputtable{tables/tab_ablation.tex}
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Compilation time}
+All 24 main instances compile in at most 16\,ms. Fig.~\ref{fig:scaling} scales the inputs to 26{,}594 output instructions. A log--log fit of compile time against program size has slope $1.04$, i.e.\ linear time at roughly $8\,\mu$s per instruction, and the full \QR{} pipeline is comparable to Qiskit's own level-1 transpilation of its output on HS, ADD and GRV (e.g.\ 206\,ms vs.\ 238\,ms for HS-1024). It is slower on BV, where Qiskit has little work per instruction. On the largest inputs the two reclamation passes account for 52--54\% of the time, scheduling for 18--22\%, allocation for 14--17\% and type checking for 9--10\%. The depth-neutral search costs at most 0.51\,s, dominated by the Qiskit transpilation of each candidate.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/fig_scaling.pdf}
+\caption{Compile time versus program size (log--log): the \QR{} pipeline (solid) and Qiskit level-1 transpilation of the same output (dotted).}
+\label{fig:scaling}
+\end{figure}
+
+\subsection{Static diagnostics}
+\label{sec:diag}
+The same facts that drive reclamation also catch programming errors at compile time. The three programs below are rejected with the messages shown, which are verbatim compiler output:
+\begin{lstlisting}[style=ir, breaklines=true]
+E1  p.cx(x0, x0)
+    no-cloning violation at [1] `cx x0 -> x0`: qubit x0 is used twice by one operation
+E2  t = x0 & x1; p.h(x0); p.cx(t, out)
+    cannot uncompute ancilla t0: its control x0 is modified by `h x0` at [5] while t0 is still needed at [6]
+E3  p.h(t); p.cx(t, out)
+    ancilla t0 can never be reclaimed: `h t0` at [2] puts t0 in superposition, and it is not measured
+\end{lstlisting}
+E2 is precisely a violation of Eq.~(\ref{eq:legal}). Silq reports comparable errors through its type system~\cite{silq}; here they fall out of the data-flow analysis.
+
+\subsection{Discussion and threats to validity}
+\begin{itemize}
+\item \emph{Depth model.} Depth is measured after lowering to $\{\mathrm{CX},U\}$ with all-to-all connectivity. Real devices add routing, and a mid-circuit reset is much slower than a gate on superconducting hardware, so \QR{}-min trades execution time for qubits. \QR{}-DN avoids this trade by construction.
+\item \emph{Baseline.} SCOPE is our idealised model of lexical reclamation, implemented in the same framework and deliberately strengthened (Eq.~\ref{eq:lazy}). It is not a re-implementation of Silq, Q\# or Qrisp, whose actual behaviour may differ.
+\item \emph{Benchmarks.} The benchmarks are small to medium and were chosen to isolate mechanisms rather than to represent a workload distribution.
+\item \emph{Verification.} Exact simulation is limited to about 20 qubits. Larger instances rely on the static guarantees, and the linear type check and the physical no-aliasing check run on every compilation.
+\item \emph{Analysis precision.} The basis-state analysis is conservative: an ancilla touched by a non-qfree gate is never uncomputed by reversal. Given the coNP-hardness result of~\cite{liu2026}, some precision loss is unavoidable for an analysis that runs in linear time.
+\end{itemize}
+
+%% =====================================================================
+\section{Conclusion \& Future Work}
+\label{sec:concl}
+This case study treated qubit reclamation in high-level quantum languages as a compiler memory-management problem and solved it with standard compiler machinery adapted to quantum constraints. A linear IR enforces no-cloning, a basis-state abstract interpretation and an uncomputation-aware liveness analysis decide where reclamation is legal, a unified pass inserts uncomputation, early measurement and resets, and an earliest-ready-first linear-scan allocator exposes the width--depth trade-off through one budget. Across five program families, \QR{} reduced width by 55.6\% on average (up to 98.4\%), by 42.3\% relative to lexical reclamation, and by 36.2\% with no depth penalty, while compiling in linear time and passing every semantic check. Five extensions are technically meaningful:
+\begin{enumerate}
+\item \textbf{Recomputation-aware placement.} Chains such as ADD's carries block early reclamation, because $\Lst(c_i)\ge P(c_{i+1})$. The next step is to extend Eq.~(\ref{eq:lstar}) with optional \emph{recomputation} edges: uncompute $c_i$ early and recompute it just before $U(c_{i+1})$. Placement then becomes a min-cost reversible pebbling problem~\cite{meuli2019,reqomp} under budget $B$, solvable by ILP/SAT for small DAGs and by a fixpoint heuristic otherwise.
+\item \textbf{Hardware-aware ERF allocation.} Replace unit latencies with device-calibrated gate, measurement and reset times and per-qubit error rates, and add coupling-map distance to the ERF key. This makes allocation a weighted interval-colouring problem that must be co-optimised with SWAP routing, because reuse changes the interaction graph the router sees.
+\item \textbf{Dirty-ancilla borrowing.} Extend the lattice with a \emph{borrowed} state so that lowering can use idle qubits that are not clean, provided they are restored afterwards. Proving restoration is coNP-hard in general~\cite{liu2026}, which calls for sound syntactic templates backed by SMT checks.
+\item \textbf{Control flow and feed-forward.} Lift the analyses from one basic block to CFGs with classically controlled branches (dynamic circuits). This requires a join on the abstract-state lattice, liveness across branches and region-based reclamation for repeat-until-success loops.
+\item \textbf{Learned budget selection.} Predict the depth-neutral knee of Fig.~\ref{fig:budget} from IR features such as DAG width, dependency-DAG height and measurement density. A learned model would replace the $\log_2 W_{\mathrm{NR}}$ compilations of the bisection and allow per-region budgets inside one program.
+\end{enumerate}
+
+\bibliographystyle{IEEEtran}
+\bibliography{refs}
+
+\end{document}

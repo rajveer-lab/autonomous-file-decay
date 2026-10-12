@@ -1,0 +1,6 @@
+E1 aliasing (no-cloning):
+  no-cloning violation at [1] `cx x0 -> x0`: qubit x0 is used twice by one operation; a gate cannot act on two copies of a qubit
+E2 control modified while ancilla live:
+  cannot uncompute ancilla t0: its control x0 is modified by `h x0` at [5] while t0 is still needed at [6]
+E3 unreclaimable (entangled) ancilla:
+  ancilla t0 can never be reclaimed: `h t0` at [2] puts t0 in superposition, and it is not measured. Leaving it allocated would leave garbage entangled with the program state.

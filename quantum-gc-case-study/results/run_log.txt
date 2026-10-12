@@ -1,0 +1,62 @@
+Python 3.13.16, Qiskit 2.5.2, NumPy 2.5.3, Linux x86_64
+E1 aliasing (no-cloning): no-cloning violation at [1] `cx x0 -> x0`: qubit x0 is used twice by one operation; a gate cannot act on two copies of a qubit
+E2 control modified while ancilla live: cannot uncompute ancilla t0: its control x0 is modified by `h x0` at [5] while t0 is still needed at [6]
+E3 unreclaimable (entangled) ancilla: ancilla t0 can never be reclaimed: `h t0` at [2] puts t0 in superposition, and it is not measured. Leaving it allocated would leave garbage entangled with the program state.
+verify BV n=8
+verify BV n=12
+verify HS n=3
+verify HS n=4
+verify RC d=3,r=3
+verify RC d=5,r=3
+verify ADD n=4
+verify ADD n=5
+verify GRV n=4,m=4
+verify GRV n=5,m=6
+main  BV   n=8        NR=9 SCOPE=9 QRmin=2 QRdn=6
+main  BV   n=16       NR=17 SCOPE=17 QRmin=2 QRdn=10
+main  BV   n=32       NR=33 SCOPE=33 QRmin=2 QRdn=11
+main  BV   n=64       NR=65 SCOPE=65 QRmin=2 QRdn=11
+main  BV   n=128      NR=129 SCOPE=129 QRmin=2 QRdn=12
+main  HS   n=4        NR=16 SCOPE=12 QRmin=9 QRdn=12
+main  HS   n=8        NR=32 SCOPE=24 QRmin=17 QRdn=24
+main  HS   n=16       NR=64 SCOPE=48 QRmin=33 QRdn=48
+main  HS   n=32       NR=128 SCOPE=96 QRmin=65 QRdn=96
+main  HS   n=64       NR=256 SCOPE=192 QRmin=129 QRdn=192
+main  RC   d=3,r=3    NR=9 SCOPE=9 QRmin=4 QRdn=7
+main  RC   d=5,r=5    NR=25 SCOPE=25 QRmin=6 QRdn=16
+main  RC   d=7,r=7    NR=49 SCOPE=49 QRmin=8 QRdn=29
+main  RC   d=9,r=9    NR=81 SCOPE=81 QRmin=10 QRdn=46
+main  RC   d=11,r=11  NR=121 SCOPE=121 QRmin=12 QRdn=67
+main  ADD  n=4        NR=12 SCOPE=12 QRmin=11 QRdn=11
+main  ADD  n=8        NR=24 SCOPE=24 QRmin=23 QRdn=23
+main  ADD  n=16       NR=48 SCOPE=48 QRmin=47 QRdn=47
+main  ADD  n=32       NR=96 SCOPE=96 QRmin=95 QRdn=95
+main  ADD  n=64       NR=192 SCOPE=192 QRmin=191 QRdn=191
+main  GRV  n=4,m=8    NR=34 SCOPE=17 QRmin=17 QRdn=18
+main  GRV  n=6,m=12   NR=54 SCOPE=27 QRmin=27 QRdn=28
+main  GRV  n=8,m=16   NR=74 SCOPE=37 QRmin=37 QRdn=38
+main  GRV  n=10,m=20  NR=262 SCOPE=47 QRmin=47 QRdn=49
+ablation done
+budget done
+scale BV n=128 instrs=833 ours=5.4ms qiskit=4.7ms
+scale BV n=256 instrs=1663 ours=11.4ms qiskit=9.3ms
+scale BV n=512 instrs=3307 ours=23.4ms qiskit=8.9ms
+scale BV n=1024 instrs=6667 ours=46.6ms qiskit=12.1ms
+scale BV n=2048 instrs=13316 ours=90.9ms qiskit=19.5ms
+scale BV n=4096 instrs=26594 ours=302.6ms qiskit=43.2ms
+scale HS n=32 instrs=736 ours=5.8ms qiskit=8.3ms
+scale HS n=64 instrs=1502 ours=11.7ms qiskit=13.7ms
+scale HS n=128 instrs=2938 ours=24.8ms qiskit=17.3ms
+scale HS n=256 instrs=5930 ours=51.6ms qiskit=28.6ms
+scale HS n=512 instrs=11788 ours=104.5ms qiskit=103.0ms
+scale HS n=1024 instrs=23552 ours=206.2ms qiskit=238.2ms
+scale ADD n=64 instrs=878 ours=9.6ms qiskit=9.7ms
+scale ADD n=128 instrs=1801 ours=15.5ms qiskit=18.5ms
+scale ADD n=256 instrs=3561 ours=31.9ms qiskit=30.7ms
+scale ADD n=512 instrs=7156 ours=68.0ms qiskit=63.8ms
+scale ADD n=1024 instrs=14321 ours=135.0ms qiskit=143.3ms
+scale GRV n=8,m=16 instrs=354 ours=2.9ms qiskit=7.4ms
+scale GRV n=10,m=20 instrs=1284 ours=9.8ms qiskit=13.5ms
+scale GRV n=12,m=24 instrs=2060 ours=15.8ms qiskit=17.6ms
+scale GRV n=14,m=28 instrs=3012 ours=24.5ms qiskit=27.1ms
+all done

@@ -1,0 +1,1 @@
+Python 3.13.16, Qiskit 2.5.2, NumPy 2.5.3, Linux x86_64

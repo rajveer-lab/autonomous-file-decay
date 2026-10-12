@@ -1,0 +1,6 @@
+paper/*.aux
+paper/*.log
+paper/*.blg
+paper/*.out
+__pycache__/
+.pytest_cache/
