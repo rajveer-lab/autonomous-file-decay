@@ -420,6 +420,8 @@ def tex_qrisp(rows: list[dict]) -> None:
         lines.append(f"{r['bench']}-{size_of(r['params'])} & {ours['qubits']}/{ours['depth']}/{ours['cx']} & "
                      f"{r['qubits']}/{r['depth']}/{r['cx']} & {ws['qubits']}/{ws['depth']}/{ws['cx']} \\\\")
     (TAB / "tab_qrisp.tex").write_text("\n".join(lines) + "\n")
+    keep = ("HS-16 ", "QAOA-16 ", "GRV-6 ", "ADD-8 ")
+    (TAB / "tab_qrisp_small.tex").write_text("\n".join(l for l in lines if l.startswith(keep)) + "\n")
 
 
 def summary(main_rows, abl, verify, sca, bud, mut) -> None:
