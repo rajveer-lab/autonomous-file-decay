@@ -1,5 +1,5 @@
-E1 aliasing (no-cloning):
-  no-cloning violation at [1] `cx x0 -> x0`: qubit x0 is used twice by one operation; a gate cannot act on two copies of a qubit
+E1 aliasing:
+  aliasing violation at [1] `cx x0 -> x0`: qubit x0 appears twice in one operation; QR-IR qubits are linear, so an operation cannot use one qubit in two roles
 E2 control modified while ancilla live:
   cannot uncompute ancilla t0: its control x0 is modified by `h x0` at [5] while t0 is still needed at [6]
 E3 unreclaimable (entangled) ancilla:

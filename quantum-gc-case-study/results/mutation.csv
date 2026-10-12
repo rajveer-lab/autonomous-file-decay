@@ -1,0 +1,238 @@
+bench,params,operator,ancilla,faulty,verdict,diagnostic,runtime_check
+HS,n=3,alias,,1,rejected,"aliasing violation at [16] `ccx x0, y0 -> x0`",
+HS,n=3,alias,,1,rejected,"aliasing violation at [19] `ccx x1, y1 -> x1`",
+HS,n=3,alias,,1,rejected,"aliasing violation at [22] `ccx x2, y2 -> x2`",
+HS,n=3,alias,,1,rejected,"aliasing violation at [35] `ccx x0, y0 -> x0`",
+HS,n=3,alias,,1,rejected,"aliasing violation at [38] `ccx x1, y1 -> x1`",
+HS,n=3,alias,,1,rejected,"aliasing violation at [41] `ccx x2, y2 -> x2`",
+HS,n=3,clobber-early,t0,0,rejected,cannot uncompute ancilla t0,
+HS,n=3,clobber-late,t0,0,rejected,cannot uncompute ancilla t0,
+HS,n=3,clobber-after,t0,0,accepted,,gc-ok
+HS,n=3,reset-control,t0,1,rejected,cannot uncompute ancilla t0,
+HS,n=3,clobber-early,t0,1,rejected,cannot uncompute ancilla t0,
+HS,n=3,clobber-late,t0,1,rejected,cannot uncompute ancilla t0,
+HS,n=3,clobber-after,t0,0,accepted,,gc-ok
+HS,n=3,reset-control,t0,1,rejected,cannot uncompute ancilla t0,
+HS,n=3,superpose,t0,1,rejected,ancilla t0 can never be reclaimed,
+HS,n=3,clobber-early,t1,0,rejected,cannot uncompute ancilla t1,
+HS,n=3,clobber-late,t1,0,rejected,cannot uncompute ancilla t1,
+HS,n=3,clobber-after,t1,0,accepted,,gc-ok
+HS,n=3,reset-control,t1,1,rejected,cannot uncompute ancilla t1,
+HS,n=3,clobber-early,t1,1,rejected,cannot uncompute ancilla t1,
+HS,n=3,clobber-late,t1,1,rejected,cannot uncompute ancilla t1,
+HS,n=3,clobber-after,t1,0,accepted,,gc-ok
+HS,n=3,reset-control,t1,1,rejected,cannot uncompute ancilla t1,
+HS,n=3,superpose,t1,1,rejected,ancilla t1 can never be reclaimed,
+HS,n=3,clobber-early,t2,1,rejected,cannot uncompute ancilla t2,
+HS,n=3,clobber-late,t2,1,rejected,cannot uncompute ancilla t2,
+HS,n=3,clobber-after,t2,0,accepted,,gc-ok
+HS,n=3,reset-control,t2,1,rejected,cannot uncompute ancilla t2,
+HS,n=3,clobber-early,t2,1,rejected,cannot uncompute ancilla t2,
+HS,n=3,clobber-late,t2,1,rejected,cannot uncompute ancilla t2,
+HS,n=3,clobber-after,t2,0,accepted,,gc-ok
+HS,n=3,reset-control,t2,1,rejected,cannot uncompute ancilla t2,
+HS,n=3,superpose,t2,1,rejected,ancilla t2 can never be reclaimed,
+HS,n=3,clobber-early,t3,1,rejected,cannot uncompute ancilla t3,
+HS,n=3,clobber-late,t3,1,rejected,cannot uncompute ancilla t3,
+HS,n=3,clobber-after,t3,0,accepted,,gc-ok
+HS,n=3,reset-control,t3,1,rejected,cannot uncompute ancilla t3,
+HS,n=3,clobber-early,t3,1,rejected,cannot uncompute ancilla t3,
+HS,n=3,clobber-late,t3,1,rejected,cannot uncompute ancilla t3,
+HS,n=3,clobber-after,t3,0,accepted,,gc-ok
+HS,n=3,reset-control,t3,1,rejected,cannot uncompute ancilla t3,
+HS,n=3,superpose,t3,1,rejected,ancilla t3 can never be reclaimed,
+HS,n=3,clobber-early,t4,1,rejected,cannot uncompute ancilla t4,
+HS,n=3,clobber-late,t4,1,rejected,cannot uncompute ancilla t4,
+HS,n=3,clobber-after,t4,0,accepted,,gc-ok
+HS,n=3,reset-control,t4,1,rejected,cannot uncompute ancilla t4,
+HS,n=3,clobber-early,t4,1,rejected,cannot uncompute ancilla t4,
+HS,n=3,clobber-late,t4,1,rejected,cannot uncompute ancilla t4,
+HS,n=3,clobber-after,t4,0,accepted,,gc-ok
+HS,n=3,reset-control,t4,1,rejected,cannot uncompute ancilla t4,
+HS,n=3,superpose,t4,1,rejected,ancilla t4 can never be reclaimed,
+HS,n=3,clobber-early,t5,1,rejected,cannot uncompute ancilla t5,
+HS,n=3,clobber-late,t5,1,rejected,cannot uncompute ancilla t5,
+HS,n=3,clobber-after,t5,0,accepted,,gc-ok
+HS,n=3,reset-control,t5,1,rejected,cannot uncompute ancilla t5,
+HS,n=3,clobber-early,t5,1,rejected,cannot uncompute ancilla t5,
+HS,n=3,clobber-late,t5,1,rejected,cannot uncompute ancilla t5,
+HS,n=3,clobber-after,t5,0,accepted,,gc-ok
+HS,n=3,reset-control,t5,1,rejected,cannot uncompute ancilla t5,
+HS,n=3,superpose,t5,1,rejected,ancilla t5 can never be reclaimed,
+QAOA,n=4,alias,,1,rejected,"aliasing violation at [9] `ccx x0, x1 -> x0`",
+QAOA,n=4,alias,,1,rejected,"aliasing violation at [12] `ccx x1, x2 -> x1`",
+QAOA,n=4,alias,,1,rejected,"aliasing violation at [15] `ccx x2, x3 -> x2`",
+QAOA,n=4,alias,,1,rejected,"aliasing violation at [18] `ccx x3, x0 -> x3`",
+QAOA,n=4,clobber-early,t0,1,rejected,cannot uncompute ancilla t0,
+QAOA,n=4,clobber-late,t0,1,rejected,cannot uncompute ancilla t0,
+QAOA,n=4,clobber-after,t0,0,accepted,,gc-ok
+QAOA,n=4,reset-control,t0,1,rejected,cannot uncompute ancilla t0,
+QAOA,n=4,clobber-early,t0,1,rejected,cannot uncompute ancilla t0,
+QAOA,n=4,clobber-late,t0,1,rejected,cannot uncompute ancilla t0,
+QAOA,n=4,clobber-after,t0,0,accepted,,gc-ok
+QAOA,n=4,reset-control,t0,1,rejected,cannot uncompute ancilla t0,
+QAOA,n=4,superpose,t0,1,rejected,ancilla t0 can never be reclaimed,
+QAOA,n=4,clobber-early,t1,1,rejected,cannot uncompute ancilla t1,
+QAOA,n=4,clobber-late,t1,1,rejected,cannot uncompute ancilla t1,
+QAOA,n=4,clobber-after,t1,0,accepted,,gc-ok
+QAOA,n=4,reset-control,t1,1,rejected,cannot uncompute ancilla t1,
+QAOA,n=4,clobber-early,t1,1,rejected,cannot uncompute ancilla t1,
+QAOA,n=4,clobber-late,t1,1,rejected,cannot uncompute ancilla t1,
+QAOA,n=4,clobber-after,t1,0,accepted,,gc-ok
+QAOA,n=4,reset-control,t1,1,rejected,cannot uncompute ancilla t1,
+QAOA,n=4,superpose,t1,1,rejected,ancilla t1 can never be reclaimed,
+QAOA,n=4,clobber-early,t2,1,rejected,cannot uncompute ancilla t2,
+QAOA,n=4,clobber-late,t2,1,rejected,cannot uncompute ancilla t2,
+QAOA,n=4,clobber-after,t2,0,accepted,,gc-ok
+QAOA,n=4,reset-control,t2,1,rejected,cannot uncompute ancilla t2,
+QAOA,n=4,clobber-early,t2,1,rejected,cannot uncompute ancilla t2,
+QAOA,n=4,clobber-late,t2,1,rejected,cannot uncompute ancilla t2,
+QAOA,n=4,clobber-after,t2,0,accepted,,gc-ok
+QAOA,n=4,reset-control,t2,1,rejected,cannot uncompute ancilla t2,
+QAOA,n=4,superpose,t2,1,rejected,ancilla t2 can never be reclaimed,
+QAOA,n=4,clobber-early,t3,1,rejected,cannot uncompute ancilla t3,
+QAOA,n=4,clobber-late,t3,1,rejected,cannot uncompute ancilla t3,
+QAOA,n=4,clobber-after,t3,0,accepted,,gc-ok
+QAOA,n=4,reset-control,t3,1,rejected,cannot uncompute ancilla t3,
+QAOA,n=4,clobber-early,t3,1,rejected,cannot uncompute ancilla t3,
+QAOA,n=4,clobber-late,t3,1,rejected,cannot uncompute ancilla t3,
+QAOA,n=4,clobber-after,t3,0,accepted,,gc-ok
+QAOA,n=4,reset-control,t3,1,rejected,cannot uncompute ancilla t3,
+QAOA,n=4,superpose,t3,1,rejected,ancilla t3 can never be reclaimed,
+ADD,n=3,alias,,1,rejected,"aliasing violation at [11] `ccx a0, b0 -> a0`",
+ADD,n=3,alias,,1,rejected,"aliasing violation at [13] `ccx a1, b1 -> a1`",
+ADD,n=3,alias,,1,rejected,"aliasing violation at [14] `ccx a1, c0 -> a1`",
+ADD,n=3,alias,,1,rejected,"aliasing violation at [15] `ccx b1, c0 -> b1`",
+ADD,n=3,alias,,1,rejected,"aliasing violation at [17] `ccx a2, b2 -> a2`",
+ADD,n=3,alias,,1,rejected,"aliasing violation at [18] `ccx a2, c1 -> a2`",
+ADD,n=3,alias,,1,rejected,"aliasing violation at [19] `ccx b2, c1 -> b2`",
+ADD,n=3,alias,,1,rejected,aliasing violation at [20] `cx a2 -> a2`,
+ADD,n=3,alias,,1,rejected,aliasing violation at [21] `cx c1 -> c1`,
+ADD,n=3,alias,,1,rejected,aliasing violation at [22] `cx a1 -> a1`,
+ADD,n=3,alias,,1,rejected,aliasing violation at [23] `cx c0 -> c0`,
+ADD,n=3,alias,,1,rejected,aliasing violation at [24] `cx a0 -> a0`,
+ADD,n=3,clobber-early,c0,1,rejected,cannot uncompute ancilla c0,
+ADD,n=3,clobber-late,c0,1,rejected,cannot uncompute ancilla c0,
+ADD,n=3,clobber-after,c0,0,accepted,,gc-ok
+ADD,n=3,double-flip,c0,0,rejected,cannot uncompute ancilla c0,
+ADD,n=3,reset-control,c0,1,rejected,cannot uncompute ancilla c0,
+ADD,n=3,clobber-early,c0,0,rejected,cannot uncompute ancilla c0,
+ADD,n=3,clobber-late,c0,0,rejected,cannot uncompute ancilla c0,
+ADD,n=3,clobber-after,c0,0,accepted,,gc-ok
+ADD,n=3,double-flip,c0,0,rejected,cannot uncompute ancilla c0,
+ADD,n=3,reset-control,c0,1,rejected,cannot uncompute ancilla c0,
+ADD,n=3,superpose,c0,1,rejected,ancilla c0 can never be reclaimed,
+ADD,n=3,clobber-early,c1,1,rejected,ancilla c1 can never be reclaimed,
+ADD,n=3,clobber-late,c1,1,rejected,cannot uncompute ancilla c1,
+ADD,n=3,clobber-after,c1,0,accepted,,gc-ok
+ADD,n=3,double-flip,c1,1,rejected,ancilla c1 can never be reclaimed,
+ADD,n=3,reset-control,c1,1,rejected,ancilla c1 can never be reclaimed,
+ADD,n=3,clobber-early,c1,1,rejected,ancilla c1 can never be reclaimed,
+ADD,n=3,clobber-late,c1,0,rejected,cannot uncompute ancilla c1,
+ADD,n=3,clobber-after,c1,0,accepted,,gc-ok
+ADD,n=3,double-flip,c1,1,rejected,ancilla c1 can never be reclaimed,
+ADD,n=3,reset-control,c1,1,rejected,ancilla c1 can never be reclaimed,
+ADD,n=3,clobber-early,c1,0,accepted,,gc-ok
+ADD,n=3,clobber-late,c1,1,rejected,cannot uncompute ancilla c1,
+ADD,n=3,clobber-after,c1,0,accepted,,gc-ok
+ADD,n=3,double-flip,c1,1,rejected,cannot uncompute ancilla c1,
+ADD,n=3,reset-control,c1,0,accepted,,gc-ok
+ADD,n=3,superpose,c1,1,rejected,ancilla c1 can never be reclaimed,
+ADD,n=3,clobber-early,c2,1,rejected,ancilla c2 can never be reclaimed,
+ADD,n=3,clobber-late,c2,1,rejected,ancilla c2 can never be reclaimed,
+ADD,n=3,clobber-after,c2,0,accepted,,gc-ok
+ADD,n=3,double-flip,c2,1,rejected,ancilla c2 can never be reclaimed,
+ADD,n=3,reset-control,c2,1,rejected,ancilla c2 can never be reclaimed,
+ADD,n=3,clobber-early,c2,1,rejected,ancilla c2 can never be reclaimed,
+ADD,n=3,clobber-late,c2,1,rejected,ancilla c2 can never be reclaimed,
+ADD,n=3,clobber-after,c2,0,accepted,,gc-ok
+ADD,n=3,double-flip,c2,0,rejected,ancilla c2 can never be reclaimed,
+ADD,n=3,reset-control,c2,1,rejected,ancilla c2 can never be reclaimed,
+ADD,n=3,clobber-early,c2,0,accepted,,gc-ok
+ADD,n=3,clobber-late,c2,1,rejected,ancilla c2 can never be reclaimed,
+ADD,n=3,clobber-after,c2,0,accepted,,gc-ok
+ADD,n=3,double-flip,c2,1,rejected,ancilla c2 can never be reclaimed,
+ADD,n=3,reset-control,c2,0,accepted,,gc-ok
+ADD,n=3,superpose,c2,1,rejected,ancilla c2 can never be reclaimed,
+GRV,"n=4,m=4",alias,,1,rejected,"aliasing violation at [10] `mcx !x2, x1, !x0 -> x2`",
+GRV,"n=4,m=4",alias,,1,rejected,"aliasing violation at [13] `mcx !x2, !x0, !x3 -> x2`",
+GRV,"n=4,m=4",alias,,1,rejected,"aliasing violation at [16] `mcx x2, x0, x3 -> x2`",
+GRV,"n=4,m=4",alias,,1,rejected,"aliasing violation at [19] `mcx !x3, !x0, !x2 -> x3`",
+GRV,"n=4,m=4",alias,,1,rejected,"aliasing violation at [20] `mcz c0, c1, c2 -> c0`",
+GRV,"n=4,m=4",alias,,1,rejected,"aliasing violation at [30] `mcz x0, x1, x2 -> x0`",
+GRV,"n=4,m=4",clobber-early,c0,0,accepted,,gc-ok
+GRV,"n=4,m=4",clobber-late,c0,1,rejected,cannot uncompute ancilla c0,
+GRV,"n=4,m=4",clobber-after,c0,0,accepted,,gc-ok
+GRV,"n=4,m=4",double-flip,c0,1,rejected,cannot uncompute ancilla c0,
+GRV,"n=4,m=4",reset-control,c0,0,accepted,,gc-ok
+GRV,"n=4,m=4",clobber-early,c0,0,accepted,,gc-ok
+GRV,"n=4,m=4",clobber-late,c0,1,rejected,cannot uncompute ancilla c0,
+GRV,"n=4,m=4",clobber-after,c0,0,accepted,,gc-ok
+GRV,"n=4,m=4",double-flip,c0,1,rejected,cannot uncompute ancilla c0,
+GRV,"n=4,m=4",reset-control,c0,0,accepted,,gc-ok
+GRV,"n=4,m=4",clobber-early,c0,0,accepted,,gc-ok
+GRV,"n=4,m=4",clobber-late,c0,1,rejected,cannot uncompute ancilla c0,
+GRV,"n=4,m=4",clobber-after,c0,0,accepted,,gc-ok
+GRV,"n=4,m=4",double-flip,c0,1,rejected,cannot uncompute ancilla c0,
+GRV,"n=4,m=4",reset-control,c0,0,accepted,,gc-ok
+GRV,"n=4,m=4",superpose,c0,1,rejected,ancilla c0 can never be reclaimed,
+GRV,"n=4,m=4",clobber-early,c1,1,rejected,cannot uncompute ancilla c0,
+GRV,"n=4,m=4",clobber-late,c1,1,rejected,cannot uncompute ancilla c0,
+GRV,"n=4,m=4",clobber-after,c1,0,accepted,,gc-ok
+GRV,"n=4,m=4",double-flip,c1,1,rejected,cannot uncompute ancilla c0,
+GRV,"n=4,m=4",reset-control,c1,1,rejected,cannot uncompute ancilla c0,
+GRV,"n=4,m=4",clobber-early,c1,1,rejected,cannot uncompute ancilla c0,
+GRV,"n=4,m=4",clobber-late,c1,1,rejected,cannot uncompute ancilla c0,
+GRV,"n=4,m=4",clobber-after,c1,0,accepted,,gc-ok
+GRV,"n=4,m=4",double-flip,c1,1,rejected,cannot uncompute ancilla c0,
+GRV,"n=4,m=4",reset-control,c1,1,rejected,cannot uncompute ancilla c0,
+GRV,"n=4,m=4",clobber-early,c1,0,accepted,,gc-ok
+GRV,"n=4,m=4",clobber-late,c1,1,rejected,cannot uncompute ancilla c1,
+GRV,"n=4,m=4",clobber-after,c1,0,accepted,,gc-ok
+GRV,"n=4,m=4",double-flip,c1,1,rejected,cannot uncompute ancilla c1,
+GRV,"n=4,m=4",reset-control,c1,0,accepted,,gc-ok
+GRV,"n=4,m=4",superpose,c1,1,rejected,ancilla c1 can never be reclaimed,
+GRV,"n=4,m=4",clobber-early,c2,1,rejected,cannot uncompute ancilla c0,
+GRV,"n=4,m=4",clobber-late,c2,1,rejected,cannot uncompute ancilla c0,
+GRV,"n=4,m=4",clobber-after,c2,0,accepted,,gc-ok
+GRV,"n=4,m=4",double-flip,c2,1,rejected,cannot uncompute ancilla c0,
+GRV,"n=4,m=4",reset-control,c2,1,rejected,cannot uncompute ancilla c0,
+GRV,"n=4,m=4",clobber-early,c2,1,rejected,cannot uncompute ancilla c0,
+GRV,"n=4,m=4",clobber-late,c2,1,rejected,cannot uncompute ancilla c0,
+GRV,"n=4,m=4",clobber-after,c2,0,accepted,,gc-ok
+GRV,"n=4,m=4",double-flip,c2,1,rejected,cannot uncompute ancilla c0,
+GRV,"n=4,m=4",reset-control,c2,1,rejected,cannot uncompute ancilla c0,
+GRV,"n=4,m=4",clobber-early,c2,1,rejected,cannot uncompute ancilla c1,
+GRV,"n=4,m=4",clobber-late,c2,1,rejected,cannot uncompute ancilla c1,
+GRV,"n=4,m=4",clobber-after,c2,0,accepted,,gc-ok
+GRV,"n=4,m=4",double-flip,c2,1,rejected,cannot uncompute ancilla c1,
+GRV,"n=4,m=4",reset-control,c2,1,rejected,cannot uncompute ancilla c1,
+GRV,"n=4,m=4",superpose,c2,1,rejected,ancilla c2 can never be reclaimed,
+GRV,"n=4,m=4",clobber-early,c3,1,rejected,cannot uncompute ancilla c0,
+GRV,"n=4,m=4",clobber-late,c3,1,rejected,cannot uncompute ancilla c0,
+GRV,"n=4,m=4",clobber-after,c3,0,accepted,,gc-ok
+GRV,"n=4,m=4",double-flip,c3,1,rejected,cannot uncompute ancilla c0,
+GRV,"n=4,m=4",reset-control,c3,1,rejected,cannot uncompute ancilla c0,
+GRV,"n=4,m=4",clobber-early,c3,1,rejected,cannot uncompute ancilla c0,
+GRV,"n=4,m=4",clobber-late,c3,1,rejected,cannot uncompute ancilla c0,
+GRV,"n=4,m=4",clobber-after,c3,0,accepted,,gc-ok
+GRV,"n=4,m=4",double-flip,c3,1,rejected,cannot uncompute ancilla c0,
+GRV,"n=4,m=4",reset-control,c3,1,rejected,cannot uncompute ancilla c0,
+GRV,"n=4,m=4",clobber-early,c3,1,rejected,cannot uncompute ancilla c1,
+GRV,"n=4,m=4",clobber-late,c3,1,rejected,cannot uncompute ancilla c1,
+GRV,"n=4,m=4",clobber-after,c3,0,accepted,,gc-ok
+GRV,"n=4,m=4",double-flip,c3,1,rejected,cannot uncompute ancilla c1,
+GRV,"n=4,m=4",reset-control,c3,1,rejected,cannot uncompute ancilla c1,
+GRV,"n=4,m=4",superpose,c3,1,rejected,ancilla c3 can never be reclaimed,
+BV,n=6,alias,,1,rejected,aliasing violation at [15] `cx x0 -> x0`,
+BV,n=6,alias,,1,rejected,aliasing violation at [16] `cx x1 -> x1`,
+BV,n=6,alias,,1,rejected,aliasing violation at [17] `cx x2 -> x2`,
+BV,n=6,alias,,1,rejected,aliasing violation at [18] `cx x4 -> x4`,
+RC,"d=3,r=2",alias,,1,rejected,aliasing violation at [4] `cx d0 -> d0`,
+RC,"d=3,r=2",alias,,1,rejected,aliasing violation at [5] `cx d1 -> d1`,
+RC,"d=3,r=2",alias,,1,rejected,aliasing violation at [8] `cx d1 -> d1`,
+RC,"d=3,r=2",alias,,1,rejected,aliasing violation at [9] `cx d2 -> d2`,
+RC,"d=3,r=2",alias,,1,rejected,aliasing violation at [13] `cx d0 -> d0`,
+RC,"d=3,r=2",alias,,1,rejected,aliasing violation at [14] `cx d1 -> d1`,
+RC,"d=3,r=2",alias,,1,rejected,aliasing violation at [17] `cx d1 -> d1`,
+RC,"d=3,r=2",alias,,1,rejected,aliasing violation at [18] `cx d2 -> d2`,

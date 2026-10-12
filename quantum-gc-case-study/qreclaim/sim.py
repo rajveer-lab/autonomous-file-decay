@@ -68,7 +68,7 @@ class _Sim:
 
 
 def simulate(instrs: list[Instr], phys: dict, nqubits: int, ncbits: int,
-             max_branches: int = 4096) -> dict:
+             max_branches: int = 1024) -> dict:
     sim = _Sim(nqubits)
     psi0 = np.zeros(1 << nqubits, dtype=complex)
     psi0[0] = 1.0
@@ -94,6 +94,8 @@ def simulate(instrs: list[Instr], phys: dict, nqubits: int, ncbits: int,
         elif ins.op in ("measure", "reset"):
             p = phys[ins.tgts[0]]
             sel1 = sim.bit(p) == 1
+            if 2 * len(branches) > max_branches:
+                raise RuntimeError("too many measurement branches to simulate exactly")
             nxt = []
             for w, psi, cb in branches:
                 pr1 = sim.p1(psi, p)
@@ -111,8 +113,6 @@ def simulate(instrs: list[Instr], phys: dict, nqubits: int, ncbits: int,
                             sim.apply(phi, X, p, [], [])
                     nxt.append((w * pr, phi, cb2))
             branches = nxt
-            if len(branches) > max_branches:
-                raise RuntimeError("too many measurement branches to simulate exactly")
     dist: dict = {}
     for w, _, cb in branches:
         key = "".join("x" if b is None else str(b) for b in cb)

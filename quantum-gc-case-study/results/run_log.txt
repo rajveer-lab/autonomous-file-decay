@@ -1,5 +1,5 @@
 Python 3.13.16, Qiskit 2.5.2, NumPy 2.5.3, Linux x86_64
-E1 aliasing (no-cloning): no-cloning violation at [1] `cx x0 -> x0`: qubit x0 is used twice by one operation; a gate cannot act on two copies of a qubit
+E1 aliasing: aliasing violation at [1] `cx x0 -> x0`: qubit x0 appears twice in one operation; QR-IR qubits are linear, so an operation cannot use one qubit in two roles
 E2 control modified while ancilla live: cannot uncompute ancilla t0: its control x0 is modified by `h x0` at [5] while t0 is still needed at [6]
 E3 unreclaimable (entangled) ancilla: ancilla t0 can never be reclaimed: `h t0` at [2] puts t0 in superposition, and it is not measured. Leaving it allocated would leave garbage entangled with the program state.
 verify BV n=8
@@ -12,51 +12,106 @@ verify ADD n=4
 verify ADD n=5
 verify GRV n=4,m=4
 verify GRV n=5,m=6
-main  BV   n=8        NR=9 SCOPE=9 QRmin=2 QRdn=6
-main  BV   n=16       NR=17 SCOPE=17 QRmin=2 QRdn=10
-main  BV   n=32       NR=33 SCOPE=33 QRmin=2 QRdn=11
-main  BV   n=64       NR=65 SCOPE=65 QRmin=2 QRdn=11
-main  BV   n=128      NR=129 SCOPE=129 QRmin=2 QRdn=12
-main  HS   n=4        NR=16 SCOPE=12 QRmin=9 QRdn=12
-main  HS   n=8        NR=32 SCOPE=24 QRmin=17 QRdn=24
-main  HS   n=16       NR=64 SCOPE=48 QRmin=33 QRdn=48
-main  HS   n=32       NR=128 SCOPE=96 QRmin=65 QRdn=96
-main  HS   n=64       NR=256 SCOPE=192 QRmin=129 QRdn=192
-main  RC   d=3,r=3    NR=9 SCOPE=9 QRmin=4 QRdn=7
-main  RC   d=5,r=5    NR=25 SCOPE=25 QRmin=6 QRdn=16
-main  RC   d=7,r=7    NR=49 SCOPE=49 QRmin=8 QRdn=29
-main  RC   d=9,r=9    NR=81 SCOPE=81 QRmin=10 QRdn=46
-main  RC   d=11,r=11  NR=121 SCOPE=121 QRmin=12 QRdn=67
-main  ADD  n=4        NR=12 SCOPE=12 QRmin=11 QRdn=11
-main  ADD  n=8        NR=24 SCOPE=24 QRmin=23 QRdn=23
-main  ADD  n=16       NR=48 SCOPE=48 QRmin=47 QRdn=47
-main  ADD  n=32       NR=96 SCOPE=96 QRmin=95 QRdn=95
-main  ADD  n=64       NR=192 SCOPE=192 QRmin=191 QRdn=191
-main  GRV  n=4,m=8    NR=34 SCOPE=17 QRmin=17 QRdn=18
-main  GRV  n=6,m=12   NR=54 SCOPE=27 QRmin=27 QRdn=28
-main  GRV  n=8,m=16   NR=74 SCOPE=37 QRmin=37 QRdn=38
-main  GRV  n=10,m=20  NR=262 SCOPE=47 QRmin=47 QRdn=49
+verify QAOA n=4
+verify QAOA n=6
+main  BV   n=8        NR=9 SCOPE=9 SB=2 QRmin=2 QRdn=6
+main  BV   n=16       NR=17 SCOPE=17 SB=2 QRmin=2 QRdn=10
+main  BV   n=32       NR=33 SCOPE=33 SB=2 QRmin=2 QRdn=11
+main  BV   n=64       NR=65 SCOPE=65 SB=2 QRmin=2 QRdn=11
+main  BV   n=128      NR=129 SCOPE=129 SB=2 QRmin=2 QRdn=12
+main  HS   n=4        NR=16 SCOPE=12 SB=9 QRmin=9 QRdn=12
+main  HS   n=8        NR=32 SCOPE=24 SB=17 QRmin=17 QRdn=24
+main  HS   n=16       NR=64 SCOPE=48 SB=33 QRmin=33 QRdn=48
+main  HS   n=32       NR=128 SCOPE=96 SB=65 QRmin=65 QRdn=96
+main  HS   n=64       NR=256 SCOPE=192 SB=129 QRmin=129 QRdn=192
+main  RC   d=3,r=3    NR=9 SCOPE=9 SB=4 QRmin=4 QRdn=7
+main  RC   d=5,r=5    NR=25 SCOPE=25 SB=6 QRmin=6 QRdn=16
+main  RC   d=7,r=7    NR=49 SCOPE=49 SB=8 QRmin=8 QRdn=29
+main  RC   d=9,r=9    NR=81 SCOPE=81 SB=10 QRmin=10 QRdn=46
+main  RC   d=11,r=11  NR=121 SCOPE=121 SB=12 QRmin=12 QRdn=67
+main  ADD  n=4        NR=12 SCOPE=12 SB=12 QRmin=11 QRdn=11
+main  ADD  n=8        NR=24 SCOPE=24 SB=24 QRmin=23 QRdn=23
+main  ADD  n=16       NR=48 SCOPE=48 SB=48 QRmin=47 QRdn=47
+main  ADD  n=32       NR=96 SCOPE=96 SB=96 QRmin=95 QRdn=95
+main  ADD  n=64       NR=192 SCOPE=192 SB=192 QRmin=191 QRdn=191
+main  GRV  n=4,m=8    NR=34 SCOPE=17 SB=17 QRmin=17 QRdn=18
+main  GRV  n=6,m=12   NR=54 SCOPE=27 SB=27 QRmin=27 QRdn=28
+main  GRV  n=8,m=16   NR=74 SCOPE=37 SB=37 QRmin=37 QRdn=38
+main  GRV  n=10,m=20  NR=262 SCOPE=47 SB=47 QRmin=47 QRdn=49
+main  QAOA n=4        NR=8 SCOPE=8 SB=8 QRmin=5 QRdn=5
+main  QAOA n=8        NR=16 SCOPE=16 SB=16 QRmin=9 QRdn=9
+main  QAOA n=16       NR=32 SCOPE=32 SB=32 QRmin=17 QRdn=17
+main  QAOA n=32       NR=64 SCOPE=64 SB=64 QRmin=33 QRdn=33
+main  QAOA n=64       NR=128 SCOPE=128 SB=128 QRmin=65 QRdn=65
 ablation done
 budget done
-scale BV n=128 instrs=833 ours=5.4ms qiskit=4.7ms
-scale BV n=256 instrs=1663 ours=11.4ms qiskit=9.3ms
-scale BV n=512 instrs=3307 ours=23.4ms qiskit=8.9ms
-scale BV n=1024 instrs=6667 ours=46.6ms qiskit=12.1ms
-scale BV n=2048 instrs=13316 ours=90.9ms qiskit=19.5ms
-scale BV n=4096 instrs=26594 ours=302.6ms qiskit=43.2ms
-scale HS n=32 instrs=736 ours=5.8ms qiskit=8.3ms
-scale HS n=64 instrs=1502 ours=11.7ms qiskit=13.7ms
-scale HS n=128 instrs=2938 ours=24.8ms qiskit=17.3ms
-scale HS n=256 instrs=5930 ours=51.6ms qiskit=28.6ms
-scale HS n=512 instrs=11788 ours=104.5ms qiskit=103.0ms
-scale HS n=1024 instrs=23552 ours=206.2ms qiskit=238.2ms
-scale ADD n=64 instrs=878 ours=9.6ms qiskit=9.7ms
-scale ADD n=128 instrs=1801 ours=15.5ms qiskit=18.5ms
-scale ADD n=256 instrs=3561 ours=31.9ms qiskit=30.7ms
-scale ADD n=512 instrs=7156 ours=68.0ms qiskit=63.8ms
-scale ADD n=1024 instrs=14321 ours=135.0ms qiskit=143.3ms
-scale GRV n=8,m=16 instrs=354 ours=2.9ms qiskit=7.4ms
-scale GRV n=10,m=20 instrs=1284 ours=9.8ms qiskit=13.5ms
-scale GRV n=12,m=24 instrs=2060 ours=15.8ms qiskit=17.6ms
-scale GRV n=14,m=28 instrs=3012 ours=24.5ms qiskit=27.1ms
+scale BV n=128 instrs=833 ours=6.1ms qiskit=4.7ms
+scale BV n=256 instrs=1663 ours=12.5ms qiskit=5.8ms
+scale BV n=512 instrs=3307 ours=27.6ms qiskit=8.0ms
+scale BV n=1024 instrs=6667 ours=52.3ms qiskit=12.1ms
+scale BV n=2048 instrs=13316 ours=104.1ms qiskit=21.2ms
+scale BV n=4096 instrs=26594 ours=269.0ms qiskit=41.4ms
+scale HS n=32 instrs=736 ours=8.0ms qiskit=10.2ms
+scale HS n=64 instrs=1502 ours=18.2ms qiskit=9.4ms
+scale HS n=128 instrs=2938 ours=28.6ms qiskit=14.6ms
+scale HS n=256 instrs=5930 ours=62.1ms qiskit=28.0ms
+scale HS n=512 instrs=11788 ours=123.4ms qiskit=63.6ms
+scale HS n=1024 instrs=23552 ours=269.1ms qiskit=301.2ms
+scale ADD n=64 instrs=878 ours=9.5ms qiskit=11.4ms
+scale ADD n=128 instrs=1801 ours=19.0ms qiskit=18.1ms
+scale ADD n=256 instrs=3561 ours=41.7ms qiskit=30.2ms
+scale ADD n=512 instrs=7156 ours=89.2ms qiskit=69.0ms
+scale ADD n=1024 instrs=14321 ours=181.1ms qiskit=178.4ms
+scale GRV n=8,m=16 instrs=354 ours=3.3ms qiskit=6.3ms
+scale GRV n=10,m=20 instrs=1284 ours=12.8ms qiskit=20.9ms
+scale GRV n=12,m=24 instrs=2060 ours=21.3ms qiskit=20.5ms
+scale GRV n=14,m=28 instrs=3012 ours=31.2ms qiskit=24.6ms
+{
+  "instances": 29,
+  "mean_width_reduction_SCOPE_vs_NR_pct": 12.3,
+  "geomean_width_ratio_SCOPE_vs_NR": 0.835,
+  "mean_width_reduction_SB_vs_NR_pct": 45.5,
+  "geomean_width_ratio_SB_vs_NR": 0.361,
+  "mean_width_reduction_QR-min_vs_NR_pct": 53.8,
+  "geomean_width_ratio_QR-min_vs_NR": 0.323,
+  "mean_width_reduction_QR-dn_vs_NR_pct": 37.7,
+  "geomean_width_ratio_QR-dn_vs_NR": 0.56,
+  "mean_width_reduction_QR-min_vs_SCOPE_pct": 42.8,
+  "mean_width_reduction_QR-min_vs_SB_pct": 8.3,
+  "qr_min_depth_ratio_geomean": 2.55,
+  "qr_dn_max_depth_ratio": 1.0,
+  "time_r10_ratio_dn_vs_nr_max": 2.194,
+  "time_r10_ratio_dn_vs_nr_min": 0.819,
+  "max_compile_ms_main": 42.4,
+  "max_dn_search_ms": 4375.6,
+  "main_outputs_simulated": 59,
+  "main_outputs_total": 145,
+  "main_max_tvd": 1.3e-14,
+  "verify_programs_simulated": 35,
+  "verify_programs_total": 36,
+  "verify_max_tvd": 2.7e-15,
+  "verify_max_tvd_aer": 0.027,
+  "frees_validated_qr_min_main": 1944,
+  "scaling_slope_all": 1.03,
+  "scaling_slope_ADD": 1.07,
+  "scaling_slope_BV": 1.07,
+  "scaling_slope_GRV": 1.05,
+  "scaling_slope_HS": 1.0,
+  "us_per_instr_median": 10.3,
+  "budget_knee_BV_pct_of_NR_width": 33,
+  "budget_knee_GRV_pct_of_NR_width": 51,
+  "budget_knee_HS_pct_of_NR_width": 75,
+  "budget_knee_RC_pct_of_NR_width": 59,
+  "mutation_n": 237,
+  "mutation_f": 175,
+  "mutation_tp": 175,
+  "mutation_fn": 0,
+  "mutation_fp": 10,
+  "mutation_tn": 52,
+  "mutation_gc_fail": 0,
+  "mutation_accepted_simulated": 52,
+  "mutation_recall_pct": 100.0,
+  "mutation_precision_pct": 94.6
+}
 all done
+exit=0

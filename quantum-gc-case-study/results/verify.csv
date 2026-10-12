@@ -29,3 +29,9 @@ GRV,"n=4,m=4",QR-min,9,32,1.5e-15,0.009,pass
 GRV,"n=5,m=6",NR,28,51,,,skipped (width)
 GRV,"n=5,m=6",SCOPE,14,51,2.7e-15,0.020,pass
 GRV,"n=5,m=6",QR-min,14,51,2.1e-15,0.020,pass
+QAOA,n=4,NR,8,12,3.1e-16,0.017,pass
+QAOA,n=4,SCOPE,8,12,3.1e-16,0.017,pass
+QAOA,n=4,QR-min,5,13,3.3e-16,0.008,pass
+QAOA,n=6,NR,12,18,3.7e-16,0.026,pass
+QAOA,n=6,SCOPE,12,18,3.7e-16,0.026,pass
+QAOA,n=6,QR-min,7,19,4.4e-16,0.027,pass

@@ -26,10 +26,13 @@ import numpy as np                                             # noqa: E402
 import qiskit                                                  # noqa: E402
 from qiskit_aer import AerSimulator                            # noqa: E402
 
-from qreclaim import (ABLATION, NR, QR, SCOPE, CompileError, Program,   # noqa: E402
-                      compile_depth_neutral, compile_program, measure_circuit, with_budget)
+import json                                                    # noqa: E402
+import statistics                                              # noqa: E402
+
+from qreclaim import (ABLATION, NR, QR, SB, SCOPE, CompileError, Program,   # noqa: E402
+                      compile_neutral, compile_program, measure_circuit, with_budget)
 from qreclaim.benchmarks import (SUITES, VERIFY, adder, bv, grover_sat,  # noqa: E402
-                                 hidden_shift, repetition_code)
+                                 hidden_shift, qaoa_ring, repetition_code)
 from qreclaim.sim import simulate, tvd                         # noqa: E402
 
 RES = ROOT / "results"
@@ -43,6 +46,7 @@ for d in (RES, FIG, TAB):
 STYLE = {
     "NR":       dict(color="#2a78d6", marker="o", ls="-",  label="NR (no reuse)"),
     "SCOPE":    dict(color="#eb6834", marker="s", ls="--", label="SCOPE (lexical)"),
+    "SB":       dict(color="#52514e", marker="x", ls="-.", label="SB (strong baseline)"),
     "QR-min":   dict(color="#1baf7a", marker="^", ls="-",  label="QReclaim-min"),
     "QR-dn":    dict(color="#eda100", marker="D", ls=":",  label="QReclaim-DN"),
 }
@@ -87,26 +91,41 @@ def run_main() -> list[dict]:
             mnr = measure_circuit(nr)
             sc = compile_program(b.build(), SCOPE)
             msc = measure_circuit(sc)
+            sb = compile_program(b.build(), SB)
+            msb = measure_circuit(sb)
             qr = compile_program(b.build(), QR)
             mqr = measure_circuit(qr)
             t0 = time.perf_counter()
-            dn = compile_depth_neutral(b.build, mnr["depth"], qr.nqubits, nr.nqubits)
+            dn = compile_neutral(b.build, mnr["depth"], qr.nqubits, nr.nqubits, "depth")
             search_ms = 1e3 * (time.perf_counter() - t0)
-            for name, m in (("NR", mnr), ("SCOPE", msc), ("QR-min", mqr), ("QR-dn", dn.metrics)):
+            exp = None
+            for name, c, m in (("NR", nr, mnr), ("SCOPE", sc, msc), ("SB", sb, msb),
+                               ("QR-min", qr, mqr), ("QR-dn", dn, dn.metrics)):
+                verified = ""
+                if c.nqubits <= 20:
+                    try:
+                        d = simulate(c.instrs, c.phys, c.nqubits, c.program.ncbits)
+                        exp = exp if exp is not None else b.expected()
+                        verified = f"{tvd(d, exp):.1e}"
+                    except RuntimeError:          # too many measurement branches
+                        verified = ""
                 rows.append(dict(bench=b.name, params=b.params, size=size_of(b.params), config=name,
                                  ir_instrs=len(b.build().instrs),
                                  search_ms=round(search_ms, 2) if name == "QR-dn" else "",
+                                 frees_validated=getattr(c, "frees_validated", ""),
+                                 verified_tvd=verified,
                                  **{k: (round(v, 3) if isinstance(v, float) else v) for k, v in m.items()}))
             print(f"main  {b.name:4s} {b.params:10s} NR={mnr['qubits']} SCOPE={msc['qubits']} "
-                  f"QRmin={mqr['qubits']} QRdn={dn.metrics['qubits']}", flush=True)
+                  f"SB={msb['qubits']} QRmin={mqr['qubits']} QRdn={dn.metrics['qubits']}", flush=True)
     write_csv(RES / "main.csv", rows)
     return rows
 
 
 def run_ablation() -> list[dict]:
     rows = []
-    for b in (bv(32), hidden_shift(16), repetition_code(7, 7), adder(16), grover_sat(8, 16)):
-        for cfg in ABLATION:
+    for b in (bv(32), hidden_shift(16), repetition_code(7, 7), adder(16), grover_sat(8, 16),
+              qaoa_ring(16)):
+        for cfg in [SCOPE, SB] + ABLATION:
             m = measure_circuit(compile_program(b.build(), cfg))
             rows.append(dict(bench=b.name, params=b.params, config=cfg.name, qubits=m["qubits"],
                              depth=m["depth"], cx=m["cx"], reset=m["reset"]))
@@ -168,7 +187,7 @@ def run_scaling() -> list[dict]:
              + [("GRV", grover_sat(n, 2 * n)) for n in (8, 10, 12, 14)])
     for name, b in cases:
         best = None
-        for _ in range(3):
+        for _ in range(5):
             c = compile_program(b.build(), QR)
             if best is None or c.compile_time < best.compile_time:
                 best = c
@@ -189,7 +208,7 @@ def run_diagnostics() -> list[tuple[str, str]]:
     p = Program("clone")
     x = p.qreg("x", 1)
     p.cx(x[0], x[0])
-    out.append(("E1 aliasing (no-cloning)", p))
+    out.append(("E1 aliasing", p))
 
     p = Program("deadline")
     x = p.qreg("x", 2)
@@ -222,29 +241,31 @@ def run_diagnostics() -> list[tuple[str, str]]:
 
 # --------------------------------------------------------------------------
 def fig_qubits(rows: list[dict]) -> None:
-    order = ["BV", "HS", "RC", "ADD", "GRV"]
+    order = ["BV", "HS", "RC", "ADD", "GRV", "QAOA"]
     xlab = {"BV": "secret bits $n$", "HS": "half-width $n$", "RC": "distance $d$ ($r=d$)",
-            "ADD": "operand bits $n$", "GRV": "variables $n$ ($m=2n$)"}
-    fig, axes = plt.subplots(1, 5, figsize=(7.16, 1.75))
+            "ADD": "operand bits $n$", "GRV": "variables $n$ ($m=2n$)", "QAOA": "ring size $n$"}
+    fig, axes = plt.subplots(1, 6, figsize=(7.16, 1.6))
     for ax, bname in zip(axes, order):
         for cfg in STYLE:
             pts = sorted((r["size"], r["qubits"]) for r in rows if r["bench"] == bname and r["config"] == cfg)
             xs, ys = zip(*pts)
             st = STYLE[cfg]
-            ax.plot(xs, ys, color=st["color"], marker=st["marker"], ls=st["ls"], label=st["label"])
+            ax.plot(xs, ys, color=st["color"], marker=st["marker"], ls=st["ls"], label=st["label"],
+                    lw=1.1, ms=3)
         ax.set_title(bname)
-        ax.set_xlabel(xlab[bname])
+        ax.set_xlabel(xlab[bname], fontsize=6.5)
         ax.set_yscale("log", base=2)
-        if bname in ("BV", "HS", "ADD"):
+        if bname in ("BV", "HS", "ADD", "QAOA"):
             ax.set_xscale("log", base=2)
         else:
             ax.set_xticks(sorted({r["size"] for r in rows if r["bench"] == bname}))
         ax.grid(True, which="major")
         ax.spines[["top", "right"]].set_visible(False)
+        ax.tick_params(labelsize=6)
     axes[0].set_ylabel("physical qubits")
     h, lab = axes[0].get_legend_handles_labels()
-    fig.legend(h, lab, loc="upper center", ncol=4, frameon=False, bbox_to_anchor=(0.5, 1.12))
-    fig.tight_layout(w_pad=0.6)
+    fig.legend(h, lab, loc="upper center", ncol=5, frameon=False, bbox_to_anchor=(0.5, 1.13))
+    fig.tight_layout(w_pad=0.4)
     fig.savefig(FIG / "fig_qubits.pdf")
     plt.close(fig)
 
@@ -316,20 +337,17 @@ def fig_scaling(rows: list[dict]) -> None:
 
 # --------------------------------------------------------------------------
 def tex_main(rows: list[dict]) -> None:
-    pick = {"BV": "n=128", "HS": "n=64", "RC": "d=11,r=11", "ADD": "n=64", "GRV": "n=10,m=20"}
+    pick = {"BV": "n=128", "HS": "n=64", "RC": "d=11,r=11", "ADD": "n=64", "GRV": "n=10,m=20",
+            "QAOA": "n=64"}
     get = {(r["bench"], r["params"], r["config"]): r for r in rows}
     lines = []
     for b, pr in pick.items():
-        nr, sc, qm, dn = (get[(b, pr, c)] for c in ("NR", "SCOPE", "QR-min", "QR-dn"))
-
-        def red(v):
-            return f"{100 * (1 - v / nr['qubits']):.0f}\\%"
-
+        nr, sc, sb, qm, dn = (get[(b, pr, c)] for c in ("NR", "SCOPE", "SB", "QR-min", "QR-dn"))
         lines.append(
-            f"{b} ({pr.replace(',', ', ')}) & {nr['qubits']} & {sc['qubits']} & "
-            f"\\textbf{{{qm['qubits']}}} ({red(qm['qubits'])}) & {dn['qubits']} ({red(dn['qubits'])}) & "
-            f"{nr['depth']} & {sc['depth']} & {qm['depth']} & {dn['depth']} & "
-            f"{nr['cx']} & {qm['cx']} & {qm['reset']} & {qm['compile_ms']:.1f} \\\\")
+            f"{b}-{size_of(pr)} & {nr['qubits']} & {sc['qubits']} & {sb['qubits']} & "
+            f"\\textbf{{{qm['qubits']}}} & {dn['qubits']} & "
+            f"{nr['depth']} & {sb['depth']} & {qm['depth']} & {dn['depth']} & "
+            f"{nr['cx']} & {qm['cx']} & {qm['reset']}/{dn['reset']} & {qm['compile_ms']:.1f} \\\\")
     (TAB / "tab_main.tex").write_text("\n".join(lines) + "\n")
 
 
@@ -338,13 +356,156 @@ def tex_ablation(rows: list[dict]) -> None:
     for r in rows:
         if (r["bench"], r["params"]) not in benches:
             benches.append((r["bench"], r["params"]))
-    cfgs = [c.name for c in ABLATION]
+    cfgs = []
+    for r in rows:
+        if r["config"] not in cfgs:
+            cfgs.append(r["config"])
     get = {(r["bench"], r["params"], r["config"]): r for r in rows}
     lines = []
     for cfg in cfgs:
-        cells = [f"{get[(b, p, cfg)]['qubits']} / {get[(b, p, cfg)]['depth']}" for b, p in benches]
-        lines.append(f"{cfg.replace('+', '+\\,')} & " + " & ".join(cells) + " \\\\")
+        cells = [f"{get[(b, p, cfg)]['qubits']}/{get[(b, p, cfg)]['depth']}" for b, p in benches]
+        name = {"QReclaim": "\\QR{} (full)"}.get(cfg, cfg.replace("-", "$-$", 1) if cfg.startswith("-") else cfg)
+        lines.append(f"{name} & " + " & ".join(cells) + " \\\\")
+        if cfg == "SB":
+            lines.append("\\midrule")
     (TAB / "tab_ablation.tex").write_text("\n".join(lines) + "\n")
+
+
+def tex_mutation() -> dict:
+    path = RES / "mutation.csv"
+    if not path.exists():
+        return {}
+    with path.open() as f:
+        rows = list(csv.DictReader(f))
+    names = {"alias": "alias an operand", "clobber-early": "overwrite control (early)",
+             "clobber-late": "overwrite control (late)", "clobber-after": "overwrite after last use",
+             "double-flip": "flip and restore control", "reset-control": "reset a control",
+             "superpose": "H on ancilla"}
+    lines, tot = [], dict(n=0, f=0, tp=0, fn=0, fp=0, tn=0)
+    for op in ["alias", "clobber-early", "clobber-late", "double-flip", "reset-control", "superpose",
+               "clobber-after"]:
+        rs = [r for r in rows if r["operator"] == op]
+        tp = sum(1 for r in rs if r["faulty"] == "1" and r["verdict"] == "rejected")
+        fn = sum(1 for r in rs if r["faulty"] == "1" and r["verdict"] == "accepted")
+        fp = sum(1 for r in rs if r["faulty"] == "0" and r["verdict"] == "rejected")
+        tn = sum(1 for r in rs if r["faulty"] == "0" and r["verdict"] == "accepted")
+        for k, v in (("n", len(rs)), ("f", tp + fn), ("tp", tp), ("fn", fn), ("fp", fp), ("tn", tn)):
+            tot[k] += v
+        lines.append(f"{names[op]} & {len(rs)} & {tp + fn} & {tp} & {fn} & {fp} & {tn} \\\\")
+    lines.append("\\midrule")
+    lines.append(f"total & {tot['n']} & {tot['f']} & {tot['tp']} & {tot['fn']} & {tot['fp']} & {tot['tn']} \\\\")
+    (TAB / "tab_mutation.tex").write_text("\n".join(lines) + "\n")
+    tot["gc_fail"] = sum(1 for r in rows if r["runtime_check"] == "GC-FAIL")
+    tot["accepted_simulated"] = sum(1 for r in rows if r["runtime_check"] == "gc-ok")
+    return tot
+
+
+def tex_qrisp(rows: list[dict]) -> None:
+    path = RES / "qrisp.csv"
+    if not path.exists():
+        return
+    with path.open() as f:
+        qr_rows = list(csv.DictReader(f))
+    get = {(r["bench"], r["params"], r["config"]): r for r in rows}
+    lines = []
+    for r in qr_rows:
+        if r["config"] != "Qrisp":
+            continue
+        ws = next(x for x in qr_rows if (x["bench"], x["params"], x["config"]) == (r["bench"], r["params"], "Qrisp+ws2"))
+        ours = get.get((r["bench"], r["params"], "QR-min"))
+        if ours is None:
+            ours = measure_circuit(compile_program(
+                {"HS": hidden_shift, "QAOA": qaoa_ring, "ADD": adder}[r["bench"]](size_of(r["params"])).build()
+                if r["bench"] != "GRV" else grover_sat(size_of(r["params"]), 2 * size_of(r["params"])).build(), QR))
+        lines.append(f"{r['bench']}-{size_of(r['params'])} & {ours['qubits']}/{ours['depth']}/{ours['cx']} & "
+                     f"{r['qubits']}/{r['depth']}/{r['cx']} & {ws['qubits']}/{ws['depth']}/{ws['cx']} \\\\")
+    (TAB / "tab_qrisp.tex").write_text("\n".join(lines) + "\n")
+
+
+def summary(main_rows, abl, verify, sca, bud, mut) -> None:
+    get = {(r["bench"], r["params"], r["config"]): r for r in main_rows}
+    keys = sorted({(r["bench"], r["params"]) for r in main_rows})
+    red = lambda a, b: 1 - a / b                                   # noqa: E731
+    out = {"instances": len(keys)}
+    for cfg in ("SCOPE", "SB", "QR-min", "QR-dn"):
+        rs = [red(int(get[(b, p, cfg)]["qubits"]), int(get[(b, p, "NR")]["qubits"])) for b, p in keys]
+        out[f"mean_width_reduction_{cfg}_vs_NR_pct"] = round(100 * statistics.mean(rs), 1)
+        out[f"geomean_width_ratio_{cfg}_vs_NR"] = round(statistics.geometric_mean([1 - x for x in rs]), 3)
+    for base in ("SCOPE", "SB"):
+        rs = [red(int(get[(b, p, "QR-min")]["qubits"]), int(get[(b, p, base)]["qubits"])) for b, p in keys]
+        out[f"mean_width_reduction_QR-min_vs_{base}_pct"] = round(100 * statistics.mean(rs), 1)
+    out["qr_min_depth_ratio_geomean"] = round(statistics.geometric_mean(
+        [int(get[(b, p, "QR-min")]["depth"]) / int(get[(b, p, "NR")]["depth"]) for b, p in keys]), 2)
+    out["qr_dn_max_depth_ratio"] = round(max(
+        int(get[(b, p, "QR-dn")]["depth"]) / int(get[(b, p, "NR")]["depth"]) for b, p in keys), 3)
+    out["time_r10_ratio_dn_vs_nr_max"] = round(max(
+        int(get[(b, p, "QR-dn")]["time_r10"]) / int(get[(b, p, "NR")]["time_r10"]) for b, p in keys), 3)
+    out["time_r10_ratio_dn_vs_nr_min"] = round(min(
+        int(get[(b, p, "QR-dn")]["time_r10"]) / int(get[(b, p, "NR")]["time_r10"]) for b, p in keys), 3)
+    out["max_compile_ms_main"] = round(max(float(r["compile_ms"]) for r in main_rows), 1)
+    out["max_dn_search_ms"] = round(max(float(r["search_ms"]) for r in main_rows if r["search_ms"] != ""), 1)
+    sim_main = [r for r in main_rows if r["verified_tvd"] != ""]
+    out["main_outputs_simulated"] = len(sim_main)
+    out["main_outputs_total"] = len(main_rows)
+    out["main_max_tvd"] = max(float(r["verified_tvd"]) for r in sim_main)
+    sim_ver = [r for r in verify if r["tvd_exact"] != ""]
+    out["verify_programs_simulated"] = len(sim_ver)
+    out["verify_programs_total"] = len(verify)
+    out["verify_max_tvd"] = max(float(r["tvd_exact"]) for r in sim_ver)
+    out["verify_max_tvd_aer"] = max(float(r["tvd_aer"]) for r in sim_ver)
+    out["frees_validated_qr_min_main"] = sum(int(r["frees_validated"]) for r in main_rows if r["config"] == "QR-min")
+    x = np.log([float(r["instrs"]) for r in sca])
+    y = np.log([float(r["compile_ms"]) for r in sca])
+    out["scaling_slope_all"] = round(float(np.polyfit(x, y, 1)[0]), 2)
+    for b in sorted({r["bench"] for r in sca}):
+        pts = [r for r in sca if r["bench"] == b]
+        out[f"scaling_slope_{b}"] = round(float(np.polyfit(np.log([float(r["instrs"]) for r in pts]),
+                                                           np.log([float(r["compile_ms"]) for r in pts]), 1)[0]), 2)
+    out["us_per_instr_median"] = round(statistics.median(
+        [1e3 * float(r["compile_ms"]) / float(r["instrs"]) for r in sca]), 1)
+    for key in sorted({(r["bench"], r["params"]) for r in bud}):
+        pts = [r for r in bud if (r["bench"], r["params"]) == key]
+        ref, hi = int(pts[0]["nr_depth"]), int(pts[0]["nr_qubits"])
+        first = next((r for r in pts if int(r["depth"]) <= ref), None)
+        if first:
+            out[f"budget_knee_{key[0]}_pct_of_NR_width"] = round(100 * int(first["budget"]) / hi)
+    out.update({f"mutation_{k}": v for k, v in mut.items()})
+    if mut:
+        out["mutation_recall_pct"] = round(100 * mut["tp"] / max(1, mut["tp"] + mut["fn"]), 1)
+        out["mutation_precision_pct"] = round(100 * mut["tp"] / max(1, mut["tp"] + mut["fp"]), 1)
+    (RES / "summary.json").write_text(json.dumps(out, indent=2) + "\n")
+    m = {
+        "NInst": out["instances"],
+        "RedQRvsNR": out["mean_width_reduction_QR-min_vs_NR_pct"],
+        "RedDNvsNR": out["mean_width_reduction_QR-dn_vs_NR_pct"],
+        "RedQRvsSCOPE": out["mean_width_reduction_QR-min_vs_SCOPE_pct"],
+        "RedQRvsSB": out["mean_width_reduction_QR-min_vs_SB_pct"],
+        "GeoQR": out["geomean_width_ratio_QR-min_vs_NR"],
+        "DepthQR": out["qr_min_depth_ratio_geomean"],
+        "DNMaxDepth": out["qr_dn_max_depth_ratio"],
+        "TimeTenMin": out["time_r10_ratio_dn_vs_nr_min"],
+        "TimeTenMax": out["time_r10_ratio_dn_vs_nr_max"],
+        "MaxCompileMs": out["max_compile_ms_main"],
+        "MaxDNSearchMs": out["max_dn_search_ms"],
+        "MainSim": out["main_outputs_simulated"], "MainTotal": out["main_outputs_total"],
+        "VerSim": out["verify_programs_simulated"], "VerTotal": out["verify_programs_total"],
+        "MaxTVD": f"{max(out['main_max_tvd'], out['verify_max_tvd']):.1e}".replace("e-", "\\times10^{-") + "}",
+        "VerMaxAer": f"{out['verify_max_tvd_aer']:.3f}",
+        "FreesValidated": out["frees_validated_qr_min_main"],
+        "Slope": out["scaling_slope_all"], "UsPerInstr": out["us_per_instr_median"],
+        "KneeBV": out.get("budget_knee_BV_pct_of_NR_width", "--"),
+        "KneeHS": out.get("budget_knee_HS_pct_of_NR_width", "--"),
+        "KneeRC": out.get("budget_knee_RC_pct_of_NR_width", "--"),
+        "KneeGRV": out.get("budget_knee_GRV_pct_of_NR_width", "--"),
+        "MutN": out.get("mutation_n", 0), "MutFaulty": out.get("mutation_f", 0),
+        "MutFP": out.get("mutation_fp", 0), "MutRecall": out.get("mutation_recall_pct", 0),
+        "MutPrecision": out.get("mutation_precision_pct", 0),
+    }
+    lines = []
+    for k, v in m.items():
+        lines.append(f"\\newcommand{{\\{k}}}{{{v}}}")
+    (TAB / "numbers.tex").write_text("\n".join(lines) + "\n")
+    print(json.dumps(out, indent=2))
 
 
 def tex_verify(rows: list[dict]) -> None:
@@ -381,31 +542,30 @@ def load(name: str) -> list[dict]:
 def main() -> None:
     if "--figures-only" in sys.argv:
         main_rows, bud, sca = load("main.csv"), load("budget.csv"), load("scaling.csv")
-        fig_qubits(main_rows)
-        fig_budget(bud)
-        fig_scaling(sca)
-        tex_main(main_rows)
-        tex_ablation(load("ablation.csv"))
-        tex_verify(load("verify.csv"))
-        return
-    env = (f"Python {platform.python_version()}, Qiskit {qiskit.__version__}, "
-           f"NumPy {np.__version__}, {platform.system()} {platform.machine()}")
-    (RES / "environment.txt").write_text(env + "\n")
-    print(env)
-    msgs = run_diagnostics()
-    for t, m in msgs:
-        print(f"{t}: {m}")
-    verify = run_verify()
-    main_rows = run_main()
-    abl = run_ablation()
-    bud = run_budget()
-    sca = run_scaling()
+        abl, verify = load("ablation.csv"), load("verify.csv")
+    else:
+        env = (f"Python {platform.python_version()}, Qiskit {qiskit.__version__}, "
+               f"NumPy {np.__version__}, {platform.system()} {platform.machine()}")
+        (RES / "environment.txt").write_text(env + "\n")
+        print(env)
+        for t, m in run_diagnostics():
+            print(f"{t}: {m}")
+        verify = run_verify()
+        main_rows = run_main()
+        abl = run_ablation()
+        bud = run_budget()
+        sca = run_scaling()
+        main_rows, bud, sca = load("main.csv"), load("budget.csv"), load("scaling.csv")
+        abl, verify = load("ablation.csv"), load("verify.csv")
     fig_qubits(main_rows)
     fig_budget(bud)
     fig_scaling(sca)
     tex_main(main_rows)
     tex_ablation(abl)
     tex_verify(verify)
+    tex_qrisp(main_rows)
+    mut = tex_mutation()
+    summary(main_rows, abl, verify, sca, bud, mut)
     print("all done")
 
 

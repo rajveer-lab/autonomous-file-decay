@@ -13,6 +13,9 @@ maps the program to its ideal output distribution, used for verification.
              top-down; carry-out unused                       (dependency chain)
 * GRV(n, m)  Grover search over a planted 3-SAT instance with n variables and
              m clauses, one ancilla per clause                 (iterated oracle)
+* QAOA(n)    one QAOA layer for MaxCut on an n-cycle; each edge phase is
+             computed through a temporary t = x_i AND x_(i+1), so consecutive
+             temporaries share an input                         (shared inputs)
 """
 
 from __future__ import annotations
@@ -240,13 +243,53 @@ def grover_sat(n: int, m: int, seed: int = 5, iterations: int | None = None) -> 
     return Bench("GRV", f"n={n},m={m}", build, expected)
 
 
+def qaoa_ring(n: int, layers: int = 1, gamma: float = 0.7, beta: float = 0.4) -> Bench:
+    edges = [(i, (i + 1) % n) for i in range(n)]
+
+    def build() -> Program:
+        p = Program(f"qaoa{n}")
+        x = p.qreg("x", n)
+        for q in x:
+            p.h(q)
+        for _ in range(layers):
+            with p.scope():                      # phase separator e^{i gamma x_i x_j}
+                for i, j in edges:
+                    t = p.ancilla("t")
+                    p.ccx(x[i], x[j], t)
+                    p.p(gamma, t)
+            for q in x:                          # mixer
+                p.rx(2 * beta, q)
+        for q in x:
+            p.measure(q)
+        return p
+
+    def expected() -> dict:
+        # Independent reference: the same circuit written with CP gates and no
+        # ancillas, evaluated exactly by Qiskit's statevector simulator.
+        from qiskit import QuantumCircuit
+        from qiskit.quantum_info import Statevector
+        qc = QuantumCircuit(n)
+        qc.h(range(n))
+        for _ in range(layers):
+            for i, j in edges:
+                qc.cp(gamma, i, j)
+            for q in range(n):
+                qc.rx(2 * beta, q)
+        probs = Statevector(qc).probabilities_dict()
+        return {k[::-1]: v for k, v in probs.items() if v > 1e-14}
+
+    return Bench("QAOA", f"n={n}", build, expected)
+
+
 SUITES = {
     "BV": [bv(n) for n in (8, 16, 32, 64, 128)],
     "HS": [hidden_shift(n) for n in (4, 8, 16, 32, 64)],
     "RC": [repetition_code(d, d) for d in (3, 5, 7, 9, 11)],
     "ADD": [adder(n) for n in (4, 8, 16, 32, 64)],
     "GRV": [grover_sat(n, 2 * n) for n in (4, 6, 8, 10)],
+    "QAOA": [qaoa_ring(n) for n in (4, 8, 16, 32, 64)],
 }
 
 VERIFY = [bv(8), bv(12), hidden_shift(3), hidden_shift(4), repetition_code(3, 3),
-          repetition_code(5, 3), adder(4), adder(5), grover_sat(4, 4), grover_sat(5, 6)]
+          repetition_code(5, 3), adder(4), adder(5), grover_sat(4, 4), grover_sat(5, 6),
+          qaoa_ring(4), qaoa_ring(6)]

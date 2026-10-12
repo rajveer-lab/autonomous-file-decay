@@ -51,6 +51,7 @@ class ReclaimReport:
     leaks: list = field(default_factory=list)
     gates_inserted: int = 0
     gates_removed: int = 0
+    sweeps: int = 0
 
 
 def _scope_ends(instrs: list[Instr]) -> dict:
@@ -112,14 +113,17 @@ def reclaim(instrs: list[Instr], cfg: ReclaimConfig) -> tuple[list[Instr], Recla
     P: dict = {}
 
     if cfg.placement == "eager":
-        # Worklist fixpoint; processing in reverse order of computation is a
-        # reverse topological order of the dependency DAG, so it usually
-        # converges after a single sweep.
-        order = sorted(to_unc, key=lambda a: info[a].trace[0], reverse=True)
+        # Round-robin fixpoint (Bellman-Ford style): P only grows and is
+        # bounded by the program length, so it terminates, and the number of
+        # sweeps is at most the height of the dependency DAG plus one.
+        # Visiting ancillas in reverse order of their last trace gate makes
+        # one sweep enough whenever dependants are computed after their deps.
+        order = sorted(to_unc, key=lambda a: info[a].trace[-1], reverse=True)
         Lstar = dict(L)
         changed = True
         while changed:
             changed = False
+            rep.sweeps += 1
             for a in order:
                 v = max([L[a]] + [P[b] for b in dependents.get(a, ()) if b in P])
                 if P.get(a) != v:
@@ -189,8 +193,9 @@ def reclaim(instrs: list[Instr], cfg: ReclaimConfig) -> tuple[list[Instr], Recla
         return set(info[q].deps) if kind == "U" else set()
 
     def writes(blk) -> set:
-        kind, q, _ = blk
-        return {q} if kind in ("U", "MR") else set()
+        # Every block ends with ``free q``, which hands q to the allocator, so
+        # each block counts as a write of q (a plain free included).
+        return {blk[1]}
 
     def ordered(blks: list) -> list:
         # A block that reads q must run before the block that writes q.

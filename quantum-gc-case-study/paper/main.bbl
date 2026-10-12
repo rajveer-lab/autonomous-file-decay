@@ -28,14 +28,15 @@ B.~Bichsel, M.~Baader, T.~Gehr, and M.~Vechev, ``Silq: A high-level quantum
   286--300.
 
 \bibitem{qrisp}
-R.~Seidel, S.~Bock, R.~Zander, M.~Petri{\v{c}}, N.~Steinmann, N.~Tcholtchev,
-  and M.~Hauswirth, ``Qrisp: A framework for compilable high-level programming
-  of gate-based quantum computers,'' arXiv:2406.14792, 2024.
+R.~Seidel, N.~Tcholtchev, S.~Bock, and M.~Hauswirth, ``Uncomputation in the
+  {Qrisp} high-level quantum programming framework,'' in \emph{Proc. Reversible
+  Computation (RC), LNCS vol.~13960}.\hskip 1em plus 0.5em minus 0.4em\relax
+  Springer, 2023, pp. 150--165.
 
 \bibitem{qurts}
 K.~Hirata and C.~Heunen, ``Qurts: Automatic quantum uncomputation by affine
-  types with lifetime,'' \emph{Proc. ACM Program. Lang.}, vol.~9, no. POPL,
-  2025.
+  types with lifetime,'' \emph{Proc. ACM Program. Lang.}, vol.~9, no. POPL, pp.
+  155--182, 2025.
 
 \bibitem{wootters1982}
 W.~K. Wootters and W.~H. Zurek, ``A single quantum cannot be cloned,''
@@ -49,22 +50,23 @@ C.~H. Bennett, ``Logical reversibility of computation,'' \emph{IBM J. Res.
 F.~Hua, Y.~Jin, Y.~Chen, S.~Vittal, K.~Krsulich, L.~S. Bishop, J.~Lapeyre,
   A.~Javadi-Abhari, and E.~Z. Zhang, ``{CaQR}: A compiler-assisted approach for
   qubit reuse through dynamic circuit,'' in \emph{Proc. 28th ACM Int. Conf.
-  Archit. Support Program. Lang. Oper. Syst. (ASPLOS), Vol.~3}, 2023, pp.
+  Archit. Support Program. Lang. Oper. Syst. (ASPLOS), vol.~3}, 2023, pp.
   59--71.
 
 \bibitem{decross2023}
 M.~DeCross, E.~Chertkov, M.~Kohagen, and M.~Foss-Feig, ``Qubit-reuse
   compilation with mid-circuit measurement and reset,'' \emph{Phys. Rev. X},
-  vol.~13, no.~4, p. 041057, 2023.
+  vol.~13, no.~4, 2023, art. no. 041057.
 
 \bibitem{unqomp}
 A.~Paradis, B.~Bichsel, S.~Steffen, and M.~Vechev, ``Unqomp: Synthesizing
   uncomputation in quantum circuits,'' in \emph{Proc. 42nd ACM SIGPLAN Conf.
-  Program. Lang. Design Implement. (PLDI)}, 2021.
+  Program. Lang. Design Implement. (PLDI)}, 2021, pp. 222--236.
 
 \bibitem{reqomp}
 A.~Paradis, B.~Bichsel, and M.~Vechev, ``Reqomp: Space-constrained
-  uncomputation for quantum circuits,'' \emph{Quantum}, vol.~8, p. 1258, 2024.
+  uncomputation for quantum circuits,'' \emph{Quantum}, vol.~8, 2024, art. no.
+  1258.
 
 \bibitem{square}
 Y.~Ding, X.-C. Wu, A.~Holmes, A.~Wiseth, D.~Franklin, M.~Martonosi, and F.~T.
@@ -72,24 +74,23 @@ Y.~Ding, X.-C. Wu, A.~Holmes, A.~Wiseth, D.~Franklin, M.~Martonosi, and F.~T.
   programs via cost-effective uncomputation,'' in \emph{Proc. ACM/IEEE 47th
   Annu. Int. Symp. Comput. Archit. (ISCA)}, 2020, pp. 570--583.
 
-\bibitem{meuli2019}
-G.~Meuli, M.~Soeken, M.~Roetteler, N.~Bj{\o}rner, and G.~D. Micheli,
-  ``Reversible pebbling game for quantum memory management,'' in \emph{Proc.
-  Design, Autom. Test Eur. Conf. Exhib. (DATE)}, 2019, pp. 288--291.
+\bibitem{jiang2024}
+H.~Jiang, ``Qubit recycling revisited,'' \emph{Proc. ACM Program. Lang.},
+  vol.~8, no. PLDI, pp. 1264--1287, 2024.
 
-\bibitem{liu2026}
-C.~Liu, L.~Zhou, and B.~Meng, ``Quantum uncomputation of clean and dirty
-  ancilla qubits,'' arXiv:2608.09578, 2026.
+\bibitem{classiq2025}
+I.~Reichental, R.~Alon, L.~Preminger, M.~Vax, and A.~Naveh, ``Scalable memory
+  recycling for large quantum programs,'' arXiv:2503.00822, 2025.
 
-\bibitem{qiro}
-D.~Ittah, T.~H{\"a}ner, V.~Kliuchnikov, and T.~Hoefler, ``{QIRO}: A static
-  single assignment-based quantum program representation for optimization,''
-  \emph{ACM Trans. Quantum Comput.}, vol.~3, no.~3, 2022.
+\bibitem{qiskit2024}
+A.~Javadi-Abhari, M.~Treinish, K.~Krsulich, C.~J. Wood, J.~Lishman, J.~Gacon,
+  S.~Martiel, P.~D. Nation, L.~S. Bishop, A.~W. Cross, B.~R. Johnson, and J.~M.
+  Gambetta, ``Quantum computing with {Qiskit},'' arXiv:2405.08810, 2024.
 
-\bibitem{mlirquantum}
-A.~McCaskey and T.~Nguyen, ``A {MLIR} dialect for quantum assembly languages,''
-  in \emph{Proc. IEEE Int. Conf. Quantum Comput. Eng. (QCE)}, 2021, pp.
-  255--264.
+\bibitem{yupalsberg2021}
+N.~Yu and J.~Palsberg, ``Quantum abstract interpretation,'' in \emph{Proc. 42nd
+  ACM SIGPLAN Conf. Program. Lang. Design Implement. (PLDI)}, 2021, pp.
+  542--558.
 
 \bibitem{linearscan}
 M.~Poletto and V.~Sarkar, ``Linear scan register allocation,'' \emph{ACM Trans.
