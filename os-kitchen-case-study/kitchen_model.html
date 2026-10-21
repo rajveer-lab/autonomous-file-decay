@@ -1,0 +1,1513 @@
+<title>Kitchen Synchronization Model</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: a kitchen-display-system board. The live kitchen ring sits beside the
+   code each chef is executing; metrics, the Coffman checklist and the chef
+   board sit underneath, then the benchmark. Stainless-steel neutrals, cobalt
+   for controls, status colours reserved for chef states. */
+:root {
+  --bg: #eceff1;
+  --surface: #fbfcfc;
+  --surface-2: #f2f4f6;
+  --ink: #121619;
+  --ink-2: #47515a;
+  --muted: #6f7982;
+  --line: #d2d8dd;
+  --line-2: #e4e8eb;
+  --accent: #1d5bc4;
+  --accent-ink: #ffffff;
+  --accent-soft: #dde7f8;
+  --prep: #8b959e;
+  --wait: #fab219;
+  --cook: #0ca30c;
+  --crit: #d03b3b;
+  --on-status: #0b0f0c;
+  --s1: #2a78d6;
+  --s2: #eb6834;
+  --s3: #1baf7a;
+  --s4: #eda100;
+  --grid: #e1e0d9;
+  --font-display: "Barlow Condensed", "Arial Narrow", "Roboto Condensed", sans-serif;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --radius: 6px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1214; --surface: #171b1f; --surface-2: #1f242a; --ink: #e7eaed; --ink-2: #b0b8c0;
+    --muted: #87909a; --line: #2e353c; --line-2: #252b31; --accent: #7ea4f2; --accent-ink: #0b1220;
+    --accent-soft: #1d2b47; --prep: #6f7983; --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
+    --grid: #2c2c2a; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1214; --surface: #171b1f; --surface-2: #1f242a; --ink: #e7eaed; --ink-2: #b0b8c0;
+  --muted: #87909a; --line: #2e353c; --line-2: #252b31; --accent: #7ea4f2; --accent-ink: #0b1220;
+  --accent-soft: #1d2b47; --prep: #6f7983; --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
+  --grid: #2c2c2a; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { background: var(--bg); color: var(--ink); }
+body {
+  font-family: var(--font-body); font-size: 15px; line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 20px 48px;
+}
+.wrap { max-width: 1320px; margin: 0 auto; display: grid; gap: 18px; }
+h1, h2, h3 { font-family: var(--font-display); font-weight: 700; letter-spacing: 0.01em; text-wrap: balance; margin: 0; }
+h1 { font-size: clamp(30px, 4.2vw, 44px); line-height: 1.02; }
+h2 { font-size: 24px; line-height: 1.1; }
+h3 { font-size: 15px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-2); }
+p { margin: 0; }
+.eyebrow { font-family: var(--font-display); font-weight: 600; text-transform: uppercase; letter-spacing: 0.12em; font-size: 14px; color: var(--muted); }
+.lede { color: var(--ink-2); max-width: 72ch; }
+header { display: grid; gap: 6px; }
+.byline { font-size: 13px; color: var(--muted); }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }
+.pad { padding: 14px 16px; }
+.mono { font-family: var(--font-mono); }
+.num { font-variant-numeric: tabular-nums; }
+
+/* scenes */
+.scenes { display: flex; flex-wrap: wrap; gap: 8px; }
+.scene {
+  display: inline-flex; align-items: baseline; gap: 8px; border: 1px solid var(--line); background: var(--surface);
+  color: var(--ink); border-radius: 999px; padding: 6px 14px 6px 8px; font: 500 14px/1.2 var(--font-body); cursor: pointer;
+}
+.scene b { font-family: var(--font-mono); font-size: 12px; font-weight: 600; background: var(--surface-2); color: var(--ink-2); border-radius: 999px; padding: 2px 7px; }
+.scene:hover { border-color: var(--accent); }
+.scene[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.scene[aria-pressed="true"] b { background: color-mix(in srgb, var(--accent-ink) 22%, transparent); color: var(--accent-ink); }
+.callout { display: grid; gap: 4px; padding: 12px 16px; border-left: 3px solid var(--accent); background: var(--surface); border-radius: 0 var(--radius) var(--radius) 0; }
+.callout strong { font-family: var(--font-display); font-size: 18px; letter-spacing: 0.02em; }
+.callout p { color: var(--ink-2); max-width: 90ch; }
+
+/* main board */
+.board { display: grid; grid-template-columns: minmax(0, 1.12fr) minmax(0, 1fr); gap: 18px; align-items: start; }
+@media (max-width: 960px) { .board { grid-template-columns: minmax(0, 1fr); } }
+.stage { display: grid; gap: 10px; padding: 14px; min-width: 0; }
+.stage-head { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; justify-content: space-between; }
+.stage-head h2 { font-size: 22px; }
+.pill { display: inline-flex; align-items: center; gap: 6px; font: 600 13px/1 var(--font-body); padding: 6px 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface-2); }
+.pill .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--prep); }
+.pill.ok .dot { background: var(--cook); }
+.pill.bad { border-color: var(--crit); color: var(--crit); background: color-mix(in srgb, var(--crit) 10%, var(--surface)); }
+.pill.bad .dot { background: var(--crit); }
+.pill.warn .dot { background: var(--wait); }
+.ring-box { position: relative; min-width: 0; }
+#ring { width: 100%; max-width: 100%; aspect-ratio: 1 / 1; display: block; user-select: none; }
+.banner {
+  padding: 10px 12px; border-radius: var(--radius);
+  background: color-mix(in srgb, var(--crit) 12%, var(--surface)); border: 1px solid var(--crit); color: var(--ink);
+  font-size: 14px; display: grid; gap: 2px;
+}
+.banner b { color: var(--crit); font-family: var(--font-display); font-size: 18px; letter-spacing: 0.04em; text-transform: uppercase; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; color: var(--ink-2); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.sw { width: 12px; height: 12px; border-radius: 50%; border: 1.5px solid var(--prep); background: var(--surface-2); display: inline-block; }
+.sw.wait { background: var(--wait); border-color: var(--wait); }
+.sw.cook { background: var(--cook); border-color: var(--cook); }
+.sw.crit { background: transparent; border: 2px solid var(--crit); }
+.sw.sq { border-radius: 3px; }
+.sw.dash { border-radius: 0; height: 0; width: 18px; border: 0; border-top: 2px dashed var(--wait); }
+
+.controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+button.btn {
+  font: 600 14px/1 var(--font-body); padding: 9px 14px; border-radius: var(--radius); border: 1px solid var(--line);
+  background: var(--surface); color: var(--ink); cursor: pointer;
+}
+button.btn:hover { border-color: var(--accent); }
+button.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); min-width: 92px; }
+button:focus-visible, select:focus-visible, input:focus-visible, .scene:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.clock { margin-left: auto; font-family: var(--font-mono); font-size: 14px; color: var(--ink-2); }
+label.inline { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ink-2); }
+select, input[type="number"] {
+  font: 500 14px var(--font-body); color: var(--ink); background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--radius); padding: 6px 8px;
+}
+input[type="number"] { width: 68px; }
+input[type="range"] { accent-color: var(--accent); width: 130px; }
+input[type="checkbox"] { accent-color: var(--accent); width: 16px; height: 16px; }
+
+/* code side */
+.side { display: grid; gap: 14px; min-width: 0; }
+.side .panel { min-width: 0; }
+.code-wrap { overflow: auto; max-height: 440px; border-top: 1px solid var(--line-2); }
+ol.code { list-style: none; margin: 0; padding: 8px 0; font-family: var(--font-mono); font-size: 13px; line-height: 1.55; counter-reset: ln; min-width: max-content; }
+ol.code li { display: flex; align-items: flex-start; gap: 10px; padding: 0 12px 0 0; counter-increment: ln; }
+ol.code li::before { content: counter(ln); width: 30px; text-align: right; color: var(--muted); flex: none; font-size: 12px; padding-top: 1px; }
+ol.code li.hot { background: var(--accent-soft); }
+ol.code code { white-space: pre; color: var(--ink); }
+.chips { display: inline-flex; flex-wrap: wrap; gap: 3px; }
+.chip { font: 600 11px/1 var(--font-mono); padding: 3px 5px; border-radius: 4px; border: 1px solid var(--prep); background: var(--surface-2); color: var(--ink); }
+.chip.wait { background: var(--wait); border-color: var(--wait); color: var(--on-status); }
+.chip.cook { background: var(--cook); border-color: var(--cook); color: var(--on-status); }
+.chip.crit { box-shadow: 0 0 0 2px var(--crit); }
+.chip.sel { outline: 2px solid var(--accent); outline-offset: 1px; }
+.side-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; padding: 12px 14px 8px; flex-wrap: wrap; }
+.side-head small { color: var(--muted); font-size: 12px; }
+.internals { padding: 0 14px 14px; display: grid; gap: 10px; }
+.cells { display: grid; grid-template-columns: repeat(auto-fill, minmax(88px, 1fr)); gap: 6px; }
+.cell { border: 1px solid var(--line); border-radius: 5px; padding: 6px 7px; font-size: 12px; display: grid; gap: 3px; background: var(--surface); min-width: 0; }
+.cell .k { font-family: var(--font-mono); font-weight: 600; font-size: 12px; color: var(--ink); }
+.cell .v { font-family: var(--font-mono); color: var(--ink-2); font-size: 12px; }
+.cell.busy { background: var(--surface-2); }
+.cell.bad { border-color: var(--crit); box-shadow: inset 0 0 0 1px var(--crit); }
+.kv { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--ink-2); }
+.kv b { font-family: var(--font-mono); color: var(--ink); font-weight: 600; }
+
+/* settings */
+details.settings > summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 8px; }
+details.settings > summary::-webkit-details-marker { display: none; }
+details.settings > summary::before { content: "+"; font-family: var(--font-mono); width: 18px; height: 18px; display: inline-grid; place-items: center; border: 1px solid var(--line); border-radius: 4px; font-size: 13px; color: var(--ink-2); }
+details.settings[open] > summary::before { content: "\2212"; }
+.settings-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px 20px; margin-top: 12px; align-items: start; }
+.field { display: grid; gap: 4px; font-size: 13px; color: var(--ink-2); min-width: 0; align-content: start; }
+.field select { width: 100%; max-width: 100%; min-width: 0; }
+.field .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.field output { font-family: var(--font-mono); color: var(--ink); min-width: 3ch; }
+.hint { font-size: 12px; color: var(--muted); }
+
+/* metrics */
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.tile { padding: 12px 14px; display: grid; gap: 2px; }
+.tile .label { font-size: 13px; color: var(--ink-2); }
+.tile .value { font-size: 26px; font-weight: 600; line-height: 1.15; }
+.tile .value small { font-size: 14px; color: var(--muted); font-weight: 500; }
+.tile .note { font-size: 12px; color: var(--muted); }
+.tile.alert { border-color: var(--crit); }
+.tile.alert .value { color: var(--crit); }
+
+.lower { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: 18px; align-items: start; }
+@media (max-width: 960px) { .lower { grid-template-columns: minmax(0, 1fr); } }
+.coffman { display: grid; gap: 0; }
+.cf-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; padding: 10px 0; border-top: 1px solid var(--line-2); }
+.cf-row:first-of-type { border-top: 0; }
+.cf-row .name { font-weight: 600; }
+.cf-row .why { grid-column: 1 / -1; font-size: 13px; color: var(--ink-2); }
+.cf-row .live { grid-column: 1 / -1; font-size: 12px; color: var(--muted); font-family: var(--font-mono); }
+.badge { font: 600 12px/1 var(--font-body); padding: 5px 8px; border-radius: 999px; white-space: nowrap; border: 1px solid var(--line); display: inline-flex; gap: 5px; align-items: center; height: fit-content; }
+.badge.holds { color: var(--ink); background: color-mix(in srgb, var(--wait) 22%, var(--surface)); border-color: color-mix(in srgb, var(--wait) 60%, var(--line)); }
+.badge.broken { color: var(--ink); background: color-mix(in srgb, var(--cook) 16%, var(--surface)); border-color: color-mix(in srgb, var(--cook) 55%, var(--line)); }
+.badge.danger { color: var(--crit); background: color-mix(in srgb, var(--crit) 10%, var(--surface)); border-color: var(--crit); }
+.verdict { margin-top: 6px; padding: 10px 12px; border-radius: var(--radius); background: var(--surface-2); font-size: 14px; }
+
+.table-wrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line-2); white-space: nowrap; }
+th { font-weight: 600; color: var(--ink-2); font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; }
+td.r, th.r { text-align: right; font-variant-numeric: tabular-nums; }
+.chef-board { max-height: 420px; overflow: auto; }
+.cstate { display: inline-flex; align-items: center; gap: 6px; font-weight: 500; }
+.cstate i { width: 10px; height: 10px; border-radius: 50%; border: 1.5px solid var(--prep); background: var(--surface-2); display: inline-block; }
+.cstate.wait i { background: var(--wait); border-color: var(--wait); }
+.cstate.cook i { background: var(--cook); border-color: var(--cook); }
+.bar { display: inline-block; height: 10px; border-radius: 0 3px 3px 0; background: var(--s1); vertical-align: middle; margin-right: 8px; }
+tr.sel td { background: var(--accent-soft); }
+
+.log { max-height: 260px; overflow: auto; font-family: var(--font-mono); font-size: 12.5px; margin: 0; padding: 8px 0; list-style: none; }
+.log li { display: grid; grid-template-columns: 9ch 4ch minmax(0, 1fr); gap: 10px; padding: 2px 14px; }
+.log li .t { color: var(--muted); text-align: right; }
+.log li.crit { color: var(--crit); font-weight: 600; }
+.log li.good .m { color: var(--ink); }
+
+/* benchmark */
+.bench-head { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; justify-content: space-between; }
+.charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+.chart { position: relative; }
+.chart svg { width: 100%; max-width: 100%; height: auto; display: block; overflow: visible; }
+.chart-title { font-weight: 600; font-size: 14px; }
+.chart-sub { font-size: 12px; color: var(--muted); }
+.series-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; color: var(--ink-2); }
+.series-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.series-legend i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+.tip { position: absolute; pointer-events: none; background: var(--surface); border: 1px solid var(--line); border-radius: 5px; padding: 6px 8px; font-size: 12px; box-shadow: 0 4px 14px rgba(0,0,0,0.12); white-space: nowrap; z-index: 2; }
+.tip b { font-family: var(--font-mono); }
+footer { font-size: 13px; color: var(--muted); display: grid; gap: 6px; }
+.mapping { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 4px 24px; font-size: 13px; color: var(--ink-2); }
+.mapping div { display: flex; justify-content: space-between; gap: 12px; border-bottom: 1px dotted var(--line); padding: 3px 0; }
+.mapping b { color: var(--ink); font-weight: 500; }
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+
+/* SVG kitchen */
+#ring text { font-family: var(--font-mono); }
+#ring .pass { fill: var(--surface-2); stroke: var(--line); }
+#ring .center-title { font-family: var(--font-display); font-weight: 700; fill: var(--ink); letter-spacing: 0.04em; text-transform: uppercase; }
+#ring .center-sub { fill: var(--ink-2); font-family: var(--font-body); }
+#ring .chef circle.disc { stroke-width: 2.5; fill: var(--surface); stroke: var(--prep); }
+#ring .chef.s-wait circle.disc { fill: var(--wait); stroke: var(--wait); }
+#ring .chef.s-cook circle.disc { fill: var(--cook); stroke: var(--cook); }
+#ring .chef.s-done circle.disc { fill: var(--surface); stroke: var(--line); stroke-dasharray: 4 3; }
+#ring .chef.dead circle.disc { stroke: var(--crit); stroke-width: 4; }
+#ring .chef text.lbl { fill: var(--ink); font-weight: 600; text-anchor: middle; dominant-baseline: central; }
+#ring .chef.s-wait text.lbl, #ring .chef.s-cook text.lbl { fill: var(--on-status); }
+#ring .chef text.st { fill: var(--on-status); font-size: 10px; text-anchor: middle; font-weight: 600; letter-spacing: 0.06em; }
+#ring .chef.s-prep text.st, #ring .chef.s-done text.st, #ring .chef.s-off text.st { fill: var(--muted); }
+#ring .chef circle.prog { fill: none; stroke: var(--ink-2); stroke-width: 3; stroke-linecap: round; opacity: 0.55; }
+#ring .chef circle.sel { fill: none; stroke: var(--accent); stroke-width: 3; }
+#ring .chef.s-off circle.disc { fill: var(--surface-2); stroke: var(--line); stroke-dasharray: 3 4; }
+#ring .chef.s-off text.lbl { fill: var(--muted); }
+#ring .chef .badge-bg { fill: var(--surface); stroke: var(--line); }
+#ring .chef text.dish { fill: var(--ink); font-size: 11px; text-anchor: middle; dominant-baseline: central; font-weight: 600; }
+#ring .chef { cursor: pointer; }
+#ring .station rect { fill: var(--surface); stroke: var(--line); stroke-width: 2; }
+#ring .station.held-cook rect { fill: color-mix(in srgb, var(--cook) 30%, var(--surface)); stroke: var(--cook); }
+#ring .station.held-wait rect { fill: color-mix(in srgb, var(--wait) 40%, var(--surface)); stroke: var(--wait); }
+#ring .station.race rect { fill: color-mix(in srgb, var(--crit) 25%, var(--surface)); stroke: var(--crit); stroke-width: 3; }
+#ring .station text { fill: var(--ink); font-size: 11px; text-anchor: middle; dominant-baseline: central; font-weight: 600; }
+#ring .station text.race-lbl { fill: var(--crit); font-family: var(--font-display); font-size: 13px; letter-spacing: 0.06em; }
+#ring .edge { stroke: var(--wait); stroke-width: 2.2; stroke-dasharray: 5 4; fill: none; }
+#ring .edge.dead { stroke: var(--crit); stroke-dasharray: none; stroke-width: 3; }
+#ring .hold { stroke: var(--crit); stroke-width: 3; fill: none; }
+#ring .permit { stroke: var(--ink-2); stroke-width: 1.5; }
+#ring .permit.on { fill: var(--accent); stroke: var(--accent); }
+#ring .permit.off { fill: var(--surface); }
+#ring marker path { fill: var(--wait); }
+#ring marker.dead path { fill: var(--crit); }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Operating Systems case study · Module 4: Concurrency</div>
+    <h1>Kitchen Synchronization Model</h1>
+    <p class="lede">A working model of the smart-kitchen order system as the Dining Philosophers Problem. Every chef is a thread, every cooking station is a binary semaphore, and the Kitchen Manager is a semaphore array or a monitor. The chefs below run the case-study code on a small simulated kernel with real semaphore and condition-variable queues.</p>
+    <p class="byline">Rajveer Singh Chopra · 24BCE0122</p>
+  </header>
+
+  <nav class="scenes" id="scenes" aria-label="Demonstration steps"></nav>
+  <div class="callout" id="callout"><strong id="callout-title"></strong><p id="callout-text"></p></div>
+
+  <div class="board">
+    <section class="panel stage" aria-label="Kitchen">
+      <div class="stage-head">
+        <h2 id="strategy-title"></h2>
+        <span class="pill" id="status-pill"><span class="dot"></span><span id="status-text"></span></span>
+      </div>
+      <div class="banner" id="banner" role="status" hidden></div>
+      <div class="ring-box">
+        <svg id="ring" viewBox="0 0 640 640" role="img" aria-label="Chefs and cooking stations arranged in a ring"></svg>
+      </div>
+      <div class="legend">
+        <span><i class="sw"></i>Preparing</span>
+        <span><i class="sw wait"></i>Hungry, waiting</span>
+        <span><i class="sw cook"></i>Cooking</span>
+        <span><i class="sw sq"></i>Station (moves next to its holder)</span>
+        <span><i class="sw dash"></i>Waits for station</span>
+        <span><i class="sw crit"></i>Deadlock or race</span>
+      </div>
+      <div class="controls">
+        <button class="btn primary" id="play" type="button">Play</button>
+        <button class="btn" id="step" type="button" title="Advance to the next kernel event">Step</button>
+        <button class="btn" id="reset" type="button">Reset</button>
+        <label class="inline" for="speed">Speed
+          <select id="speed">
+            <option value="0.25">0.25×</option>
+            <option value="0.5">0.5×</option>
+            <option value="1" selected>1×</option>
+            <option value="2">2×</option>
+            <option value="5">5×</option>
+            <option value="15">15×</option>
+            <option value="50">50×</option>
+          </select>
+        </label>
+        <span class="clock num" id="clock">t = 0.000 ms</span>
+      </div>
+    </section>
+
+    <div class="side">
+      <section class="panel" aria-label="Code">
+        <div class="side-head">
+          <h3>Code each chef is running</h3>
+          <small>Chips show which line each chef is on. Click a chef in the ring to highlight it.</small>
+        </div>
+        <div class="code-wrap"><ol class="code" id="code"></ol></div>
+      </section>
+      <section class="panel" aria-label="Kitchen Manager internals">
+        <div class="side-head">
+          <h3 id="internals-title">Kitchen Manager internals</h3>
+          <small id="internals-sub"></small>
+        </div>
+        <div class="internals" id="internals"></div>
+      </section>
+    </div>
+  </div>
+
+  <details class="panel pad settings" id="settings" open>
+    <summary><h3>Settings</h3><span class="hint">Changing a setting restarts the kitchen</span></summary>
+    <div class="settings-grid">
+      <label class="field" for="strategy">Strategy
+        <select id="strategy"></select>
+      </label>
+      <div class="field">
+        <label for="n">Chefs and stations (N)</label>
+        <div class="row"><input type="range" id="n" min="3" max="20" step="1" value="5"><output id="n-out" for="n">5</output></div>
+      </div>
+      <div class="field">
+        <span>Prepare time, ms</span>
+        <div class="row"><input type="number" id="prep-lo" min="0" max="50" step="0.5" value="1" aria-label="Prepare time minimum"> to <input type="number" id="prep-hi" min="0" max="50" step="0.5" value="3" aria-label="Prepare time maximum"></div>
+      </div>
+      <div class="field">
+        <span>Cook time, ms</span>
+        <div class="row"><input type="number" id="cook-lo" min="0.5" max="50" step="0.5" value="2" aria-label="Cook time minimum"> to <input type="number" id="cook-hi" min="0.5" max="50" step="0.5" value="5" aria-label="Cook time maximum"></div>
+      </div>
+      <div class="field">
+        <label for="reach">Reach time between first and second station</label>
+        <div class="row"><input type="range" id="reach" min="0" max="6" step="0.5" value="1"><output id="reach-out" for="reach">1 ms</output></div>
+        <span class="hint">Semaphore strategies only. Gives other chefs time to act while a chef holds one station.</span>
+      </div>
+      <div class="field">
+        <label for="gap">Check-to-set gap (race window)</label>
+        <div class="row"><input type="range" id="gap" min="0" max="2" step="0.1" value="0.5"><output id="gap-out" for="gap">0.5 ms</output></div>
+        <span class="hint">No-synchronization strategy only.</span>
+      </div>
+      <div class="field">
+        <span>Start</span>
+        <label class="inline" for="rush"><input type="checkbox" id="rush" checked> Rush hour: all chefs start hungry together (barrier)</label>
+      </div>
+      <div class="field">
+        <label for="seed">Random seed</label>
+        <div class="row"><input type="number" id="seed" min="1" max="99999" step="1" value="7"></div>
+      </div>
+    </div>
+  </details>
+
+  <section class="tiles" id="tiles" aria-label="Live metrics"></section>
+
+  <div class="lower">
+    <section class="panel pad" aria-label="Deadlock conditions">
+      <h3>Coffman conditions in this design</h3>
+      <p class="hint" style="margin-top:4px">Deadlock needs all four at once. Each solution removes one.</p>
+      <div class="coffman" id="coffman"></div>
+      <div class="verdict" id="verdict"></div>
+    </section>
+    <section class="panel" aria-label="Chef board">
+      <div class="side-head">
+        <h3>Chef board</h3>
+        <small>Click a row to highlight that chef everywhere.</small>
+      </div>
+      <div class="chef-board table-wrap">
+        <table>
+          <thead><tr><th>Chef</th><th>State</th><th>Stations held</th><th>Dishes</th><th class="r">Avg wait</th><th class="r">Longest wait</th><th>Timing</th></tr></thead>
+          <tbody id="chef-rows"></tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <section class="panel" aria-label="Event log">
+    <div class="side-head">
+      <h3>State-transition log</h3>
+      <small>Timestamped chef events (FR6), newest first</small>
+    </div>
+    <ol class="log" id="log"></ol>
+  </section>
+
+  <section class="panel pad" aria-label="Benchmark" style="display:grid;gap:14px">
+    <div class="bench-head">
+      <div style="display:grid;gap:4px">
+        <h2>Benchmark: the Section 11 experiment in the model</h2>
+        <p class="lede" style="font-size:14px">N = 5, 10 and 20 chefs; 15 dishes each; prepare 1–3 ms; cook 2–5 ms; all chefs start together at a barrier; naive chefs pause 3–6 ms between stations. Each cell averages several seeded runs. Times are simulated milliseconds; kitchen_threads.py measures the same setup on real threads.</p>
+      </div>
+      <div class="controls">
+        <label class="inline" for="bench-runs">Runs per cell <input type="number" id="bench-runs" min="1" max="100" step="1" value="20"></label>
+        <button class="btn primary" id="bench-go" type="button">Run benchmark</button>
+      </div>
+    </div>
+    <div id="bench-out"></div>
+  </section>
+
+  <section class="panel pad" aria-label="Mapping" style="display:grid;gap:10px">
+    <h3>Restaurant to OS mapping</h3>
+    <div class="mapping">
+      <div><b>Chef</b><span>Process / thread</span></div>
+      <div><b>Cooking station</b><span>Shared resource</span></div>
+      <div><b>Kitchen Manager</b><span>Semaphore array or monitor</span></div>
+      <div><b>Cooking</b><span>Critical section</span></div>
+      <div><b>Waiting for a station</b><span>Blocked state</span></div>
+      <div><b>Two chefs on one station</b><span>Race condition</span></div>
+      <div><b>Everyone holds one, waits for one</b><span>Deadlock (circular wait)</span></div>
+      <div><b>Chef keeps losing to neighbours</b><span>Starvation</span></div>
+    </div>
+  </section>
+
+  <footer>
+    <p>Chef <span class="mono">i</span> needs station <span class="mono">S<sub>i</sub></span> and <span class="mono">S<sub>(i+1) mod N</sub></span>, as in the case-study code. Semaphores keep FIFO wait queues; the monitor uses signal-and-continue (Mesa) semantics, as Python's <span class="mono">threading.Condition</span> and Java do. The companion script <span class="mono">kitchen_threads.py</span> runs the same strategies on real Python threads.</p>
+  </footer>
+</div>
+
+<script id="sim-core">
+"use strict";
+// ---------------------------------------------------------------------------
+// Simulated kernel: cooperative threads (generators) on a simulated clock,
+// with counting semaphores (FIFO queues) and a Mesa-style monitor.
+// ---------------------------------------------------------------------------
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+class Sem {
+  constructor(name, value) { this.name = name; this.value = value; this.queue = []; }
+}
+
+const SPIN = 0.1;          // ms between busy-wait checks
+
+const STRATEGIES = {
+  nosync: {
+    name: "No synchronization",
+    code: [
+      ["", "bool station_free[N] = { true, ... };  // shared, no lock"],
+      ["", ""],
+      ["", "void chef(int id) {"],
+      ["", "  int a = id, b = (id + 1) % N;"],
+      ["", "  while (true) {"],
+      ["prep", "    prepare_ingredients(id);"],
+      ["spin", "    while (!(station_free[a] && station_free[b]))"],
+      ["", "      ;                        // busy-wait"],
+      ["set", "    station_free[a] = false; // check-then-set is NOT"],
+      ["", "    station_free[b] = false; // atomic: race window"],
+      ["cook", "    cook_dish(id);"],
+      ["", "    station_free[a] = station_free[b] = true;"],
+      ["", "  }"],
+      ["", "}"],
+    ],
+    coffman: {
+      me: ["danger", "Not enforced", "The free check and the busy mark are two steps. Two chefs can both pass the check."],
+      hw: ["broken", "Removed", "A chef takes nothing until both stations look free."],
+      np: ["holds", "Holds", "Nobody takes a station away from a chef."],
+      cw: ["broken", "Cannot form", "Without hold and wait no cycle of waiting chefs can form."],
+    },
+    verdict: "No deadlock, but mutual exclusion fails: two chefs can cook on one station at once.",
+  },
+  naive: {
+    name: "Naive semaphores (left first)",
+    code: [
+      ["", "semaphore station[N];      // all initialised to 1"],
+      ["", ""],
+      ["", "void chef(int id) {"],
+      ["", "  int left = id, right = (id + 1) % N;"],
+      ["", "  while (true) {"],
+      ["prep", "    prepare_ingredients(id);"],
+      ["p1", "    wait(station[left]);    // everyone: left first"],
+      ["p2", "    wait(station[right]);   // then right"],
+      ["cook", "    cook_dish(id);"],
+      ["", "    signal(station[right]);"],
+      ["", "    signal(station[left]);"],
+      ["", "  }"],
+      ["", "}"],
+    ],
+    coffman: {
+      me: ["holds", "Holds", "Each station is a binary semaphore."],
+      hw: ["holds", "Holds", "A chef keeps its left station while it waits for the right one."],
+      np: ["holds", "Holds", "A station is only released by the chef holding it."],
+      cw: ["danger", "Possible", "If every chef holds its left station, each waits for the next chef: a cycle."],
+    },
+    verdict: "All four conditions can hold at once, so the kitchen can deadlock.",
+  },
+  ordered: {
+    name: "Semaphores with resource ordering",
+    code: [
+      ["", "semaphore station[N];      // all initialised to 1"],
+      ["", "semaphore order_log_mutex = 1;"],
+      ["", ""],
+      ["", "void chef(int id) {"],
+      ["", "  int a = id, b = (id + 1) % N;"],
+      ["", "  int first  = min(a, b);  // lower-numbered first"],
+      ["", "  int second = max(a, b);  // breaks circular wait"],
+      ["", "  while (true) {"],
+      ["prep", "    prepare_ingredients(id);"],
+      ["p1", "    wait(station[first]);"],
+      ["p2", "    wait(station[second]);"],
+      ["", "    wait(order_log_mutex);"],
+      ["", "    log_state(id, COOKING);"],
+      ["", "    signal(order_log_mutex);"],
+      ["cook", "    cook_dish(id);"],
+      ["", "    signal(station[second]);"],
+      ["", "    signal(station[first]);"],
+      ["", "  }"],
+      ["", "}"],
+    ],
+    coffman: {
+      me: ["holds", "Holds", "Each station is a binary semaphore."],
+      hw: ["holds", "Holds", "A chef still holds its first station while waiting for the second."],
+      np: ["holds", "Holds", "A station is only released by the chef holding it."],
+      cw: ["broken", "Removed", "Everyone asks for the lower-numbered station first. The last chef asks for S0 before S(N-1), so the cycle can't close."],
+    },
+    verdict: "Circular wait is impossible, so deadlock is impossible.",
+  },
+  arbitrator: {
+    name: "Semaphores with an arbitrator (N − 1)",
+    code: [
+      ["", "semaphore station[N];      // all initialised to 1"],
+      ["", "semaphore manager = N - 1; // at most N-1 chefs reach"],
+      ["", ""],
+      ["", "void chef(int id) {"],
+      ["", "  int left = id, right = (id + 1) % N;"],
+      ["", "  while (true) {"],
+      ["prep", "    prepare_ingredients(id);"],
+      ["mgr", "    wait(manager);          // ask the Kitchen Manager"],
+      ["p1", "    wait(station[left]);"],
+      ["p2", "    wait(station[right]);"],
+      ["cook", "    cook_dish(id);"],
+      ["", "    signal(station[right]);"],
+      ["", "    signal(station[left]);"],
+      ["", "    signal(manager);"],
+      ["", "  }"],
+      ["", "}"],
+    ],
+    coffman: {
+      me: ["holds", "Holds", "Each station is a binary semaphore."],
+      hw: ["holds", "Holds", "A chef still holds its left station while waiting for the right one."],
+      np: ["holds", "Holds", "A station is only released by the chef holding it."],
+      cw: ["broken", "Removed", "Only N − 1 chefs compete for N stations, so at least one of them can always get both."],
+    },
+    verdict: "Circular wait can't close with only N − 1 chefs reaching, so deadlock is impossible.",
+  },
+  monitor: {
+    name: "Monitor (Dijkstra / Hoare)",
+    code: [
+      ["", "void chef(int id) {"],
+      ["", "  while (true) {"],
+      ["prep", "    prepare_ingredients(id);"],
+      ["", "    KitchenManager.pickup(id);"],
+      ["cook", "    cook_dish(id);"],
+      ["", "    KitchenManager.putdown(id);"],
+      ["", "  }"],
+      ["", "}"],
+      ["", ""],
+      ["", "monitor KitchenManager {"],
+      ["", "  enum { PREPARING, HUNGRY, COOKING } state[N];"],
+      ["", "  condition self[N];"],
+      ["", "  void pickup(int i) {"],
+      ["", "    state[i] = HUNGRY;"],
+      ["", "    test(i);               // try to grant now"],
+      ["wait", "    if (state[i] != COOKING) self[i].wait();"],
+      ["", "  }"],
+      ["", "  void putdown(int i) {"],
+      ["", "    state[i] = PREPARING;"],
+      ["", "    test((i + N - 1) % N); // left neighbour"],
+      ["", "    test((i + 1) % N);     // right neighbour"],
+      ["", "  }"],
+      ["", "  void test(int i) {"],
+      ["", "    if (state[(i + N - 1) % N] != COOKING &&"],
+      ["", "        state[i] == HUNGRY &&"],
+      ["", "        state[(i + 1) % N] != COOKING) {"],
+      ["", "      state[i] = COOKING;"],
+      ["", "      self[i].signal();"],
+      ["", "    }"],
+      ["", "  }"],
+      ["", "}"],
+    ],
+    coffman: {
+      me: ["holds", "Holds", "The monitor lets one chef at a time change state[], and a chef cooks only when both neighbours are not cooking."],
+      hw: ["broken", "Removed", "test() grants both stations at once, or none. No chef holds one station and waits."],
+      np: ["holds", "Holds", "A station is only released in putdown()."],
+      cw: ["broken", "Cannot form", "Without hold and wait no cycle of waiting chefs can form."],
+    },
+    verdict: "Deadlock is impossible. Starvation is still possible: busy neighbours can keep taking turns.",
+  },
+  fair: {
+    name: "Monitor with FIFO tickets",
+    code: [
+      ["", "void chef(int id) {"],
+      ["", "  while (true) {"],
+      ["prep", "    prepare_ingredients(id);"],
+      ["", "    KitchenManager.pickup(id);"],
+      ["cook", "    cook_dish(id);"],
+      ["", "    KitchenManager.putdown(id);"],
+      ["", "  }"],
+      ["", "}"],
+      ["", ""],
+      ["", "monitor KitchenManager {"],
+      ["", "  enum { PREPARING, HUNGRY, COOKING } state[N];"],
+      ["", "  condition self[N];"],
+      ["", "  int ticket[N], next_ticket = 0;  // arrival order"],
+      ["", "  void pickup(int i) {"],
+      ["", "    state[i] = HUNGRY;  ticket[i] = next_ticket++;"],
+      ["", "    test(i);"],
+      ["wait", "    while (state[i] != COOKING) self[i].wait();"],
+      ["", "  }"],
+      ["", "  void putdown(int i) {"],
+      ["", "    state[i] = PREPARING;"],
+      ["", "    test((i + N - 1) % N);"],
+      ["", "    test((i + 1) % N);"],
+      ["", "  }"],
+      ["", "  bool ahead(int j, int i) {  // j asked before i"],
+      ["", "    return state[j] == HUNGRY && ticket[j] < ticket[i];"],
+      ["", "  }"],
+      ["", "  void test(int i) {"],
+      ["", "    int L = (i + N - 1) % N, R = (i + 1) % N;"],
+      ["", "    if (state[L] != COOKING && state[i] == HUNGRY &&"],
+      ["", "        state[R] != COOKING && !ahead(L, i) && !ahead(R, i)) {"],
+      ["", "      state[i] = COOKING;"],
+      ["", "      self[i].signal();"],
+      ["", "    }"],
+      ["", "  }"],
+      ["", "}"],
+    ],
+    coffman: {
+      me: ["holds", "Holds", "Same monitor as before: one chef at a time inside, both neighbours checked."],
+      hw: ["broken", "Removed", "Both stations are granted at once, or none."],
+      np: ["holds", "Holds", "A station is only released in putdown()."],
+      cw: ["broken", "Cannot form", "Without hold and wait no cycle of waiting chefs can form."],
+    },
+    verdict: "Deadlock-free and starvation-free: a chef is never overtaken by a hungry neighbour who asked later.",
+  },
+};
+
+class Kitchen {
+  constructor(cfg) {
+    this.cfg = cfg;
+    const n = this.n = cfg.n;
+    this.rand = mulberry32(cfg.seed >>> 0 || 1);
+    this.now = 0; this.ready = []; this.sleepers = []; this.seq = 0;
+    this.violations = 0; this.deadlock = null; this.lastFinish = 0;
+    this.logOn = cfg.log !== false; this.events = []; this.eventId = 0;
+    this.stations = Array.from({ length: n }, (_, i) => ({
+      id: i, holders: new Set(), sem: new Sem(`station[${i}]`, 1), free: true, raceAt: -1,
+    }));
+    this.manager = new Sem("manager", n - 1);
+    this.logMutex = new Sem("order_log_mutex", 1);
+    this.mon = { owner: null, entry: [] };
+    this.mstate = Array(n).fill("PREPARING");
+    this.cond = Array.from({ length: n }, () => []);
+    this.ticket = Array(n).fill(0); this.nextTicket = 0;
+    this.chefs = Array.from({ length: n }, (_, i) => ({
+      id: i, state: "PREP", status: "ready", line: "prep", waitingFor: null, spinning: false,
+      holds: new Set(), served: 0, waits: 0, waitSum: 0, waitMax: 0, hungryAt: 0,
+      opStart: 0, wakeAt: 0, seq: 0, blockedOn: null, gen: null,
+    }));
+    for (const c of this.chefs) { c.gen = this.program(c); this.ready.push(c); }
+  }
+
+  program(c) {
+    switch (this.cfg.strategy) {
+      case "nosync": return this.chefNoSync(c);
+      case "monitor": return this.chefMonitor(c, false);
+      case "fair": return this.chefMonitor(c, true);
+      default: return this.chefSem(c, this.cfg.strategy);
+    }
+  }
+
+  uni(r) { return r[0] + (r[1] - r[0]) * this.rand(); }
+
+  log(c, text, kind = "") {
+    if (!this.logOn) return;
+    this.events.push({ id: this.eventId++, t: this.now, c: c ? c.id : null, text, kind });
+    if (this.events.length > 400) this.events.shift();
+  }
+
+  // ---- scheduler -----------------------------------------------------------
+  wake(t) { t.status = "ready"; t.blockedOn = null; this.ready.push(t); }
+
+  run(t) {
+    for (;;) {
+      const r = t.gen.next();
+      if (r.done) { t.status = "done"; return; }
+      const op = r.value;
+      if (op.line !== undefined) t.line = op.line;
+      if (op.k === "sleep") {
+        t.status = "sleep"; t.opStart = this.now; t.wakeAt = this.now + op.ms; t.seq = this.seq++;
+        this.sleepers.push(t); return;
+      }
+      if (op.k === "P") {
+        if (op.s.value > 0) { op.s.value--; continue; }
+        op.s.queue.push(t); t.status = "blocked"; t.blockedOn = op.s.name;
+        if (op.s !== this.manager) this.log(t, `blocks on wait(${op.s.name})`);
+        else this.log(t, "blocks on wait(manager): N − 1 chefs already reaching");
+        return;
+      }
+      if (op.k === "V") {
+        if (op.s.queue.length) this.wake(op.s.queue.shift()); else op.s.value++;
+        continue;
+      }
+      if (op.k === "enter") {
+        if (this.mon.owner === null) { this.mon.owner = t.id; continue; }
+        this.mon.entry.push(t); t.status = "blocked"; t.blockedOn = "monitor entry"; return;
+      }
+      if (op.k === "exit") { this.releaseMonitor(); continue; }
+      if (op.k === "wait") {
+        this.cond[op.i].push(t); t.status = "blocked"; t.blockedOn = `self[${op.i}]`;
+        this.log(t, `waits on self[${op.i}]: a neighbour is cooking${this.cfg.strategy === "fair" ? " or asked first" : ""}`);
+        this.releaseMonitor(); return;
+      }
+    }
+  }
+
+  releaseMonitor() {
+    if (this.mon.entry.length) { const u = this.mon.entry.shift(); this.mon.owner = u.id; this.wake(u); }
+    else this.mon.owner = null;
+  }
+
+  signal(i) {
+    // Mesa semantics: the signalled chef re-enters the monitor after the signaller leaves.
+    if (this.cond[i].length) { const u = this.cond[i].shift(); u.blockedOn = "monitor entry"; this.mon.entry.push(u); }
+  }
+
+  nextEventTime() {
+    if (this.ready.length) return this.now;
+    let best = Infinity;
+    for (const s of this.sleepers) if (s.wakeAt < best) best = s.wakeAt;
+    return best;
+  }
+
+  advance(target) {
+    for (;;) {
+      while (this.ready.length) this.run(this.ready.shift());
+      this.detect();
+      let bi = -1;
+      for (let j = 0; j < this.sleepers.length; j++) {
+        const s = this.sleepers[j], b = this.sleepers[bi];
+        if (bi < 0 || s.wakeAt < b.wakeAt || (s.wakeAt === b.wakeAt && s.seq < b.seq)) bi = j;
+      }
+      if (bi < 0 || this.sleepers[bi].wakeAt > target) { if (target > this.now && target !== Infinity) this.now = target; break; }
+      const t = this.sleepers.splice(bi, 1)[0];
+      this.now = t.wakeAt; this.wake(t);
+    }
+  }
+
+  // ---- chef helpers --------------------------------------------------------
+  profile(c) { return (this.cfg.profile && this.cfg.profile[c.id]) || {}; }
+  *prepare(c, k) {
+    const p = this.profile(c);
+    if (p.off) { c.state = "OFF"; yield { k: "sleep", ms: Infinity, line: null }; }
+    if (k === 0 && this.cfg.rush) return;      // rush hour: start hungry
+    c.state = "PREP";
+    const ms = k === 0 && p.firstPrep !== undefined ? p.firstPrep : this.uni(p.prep || this.cfg.prep);
+    yield { k: "sleep", ms, line: "prep" };
+  }
+  hungry(c) { c.state = "WAIT"; c.hungryAt = this.now; this.log(c, "hungry: needs two stations"); }
+  *cook(c) {
+    const w = this.now - c.hungryAt;
+    c.waits++; c.waitSum += w; if (w > c.waitMax) c.waitMax = w;
+    c.state = "COOK";
+    this.log(c, `cooking on S${c.id} + S${(c.id + 1) % this.n} (waited ${w.toFixed(2)} ms)`, "good");
+    yield { k: "sleep", ms: this.uni(this.profile(c).cook || this.cfg.cook), line: "cook" };
+    c.served++;
+  }
+  take(c, s) {
+    const st = this.stations[s];
+    st.holders.add(c.id); c.holds.add(s);
+    if (st.holders.size > 1) {
+      this.violations++; st.raceAt = this.now;
+      this.log(c, `RACE: S${s} now used by ${[...st.holders].map((h) => "C" + h).join(" and ")}`, "crit");
+    }
+  }
+  drop(c, s) { this.stations[s].holders.delete(c.id); c.holds.delete(s); }
+  finished(c) {
+    if (c.served < this.cfg.dishes) return false;
+    c.state = "DONE"; c.line = null; this.lastFinish = this.now;
+    this.log(c, `finished ${c.served} dishes`);
+    return true;
+  }
+
+  // ---- strategies ----------------------------------------------------------
+  *chefNoSync(c) {
+    const st = this.stations, a = c.id, b = (c.id + 1) % this.n;
+    for (let k = 0; ; k++) {
+      yield* this.prepare(c, k);
+      this.hungry(c);
+      while (!(st[a].free && st[b].free)) {
+        c.spinning = true; c.waitingFor = st[a].free ? b : a;
+        yield { k: "sleep", ms: SPIN, line: "spin" };
+      }
+      c.spinning = false; c.waitingFor = null;
+      if (this.cfg.gap > 0) yield { k: "sleep", ms: this.cfg.gap, line: "set" };
+      st[a].free = false; st[b].free = false;
+      this.take(c, a); this.take(c, b);
+      yield* this.cook(c);
+      st[a].free = true; st[b].free = true;
+      this.drop(c, a); this.drop(c, b);
+      if (this.finished(c)) return;
+    }
+  }
+
+  *chefSem(c, mode) {
+    const st = this.stations, a = c.id, b = (c.id + 1) % this.n;
+    const first = mode === "ordered" ? Math.min(a, b) : a;
+    const second = mode === "ordered" ? Math.max(a, b) : b;
+    for (let k = 0; ; k++) {
+      yield* this.prepare(c, k);
+      this.hungry(c);
+      if (mode === "arbitrator") {
+        c.waitingFor = "manager";
+        yield { k: "P", s: this.manager, line: "mgr" };
+        c.waitingFor = null;
+      }
+      c.waitingFor = first;
+      yield { k: "P", s: st[first].sem, line: "p1" };
+      c.waitingFor = null; this.take(c, first);
+      this.log(c, `took S${first}, reaching for S${second}`);
+      const reach = this.cfg.reach;
+      if (reach[1] > 0) yield { k: "sleep", ms: this.uni(reach), line: "p2" };
+      c.waitingFor = second;
+      yield { k: "P", s: st[second].sem, line: "p2" };
+      c.waitingFor = null; this.take(c, second);
+      if (mode === "ordered") {
+        yield { k: "P", s: this.logMutex };
+        yield { k: "V", s: this.logMutex };
+      }
+      yield* this.cook(c);
+      this.drop(c, second); yield { k: "V", s: st[second].sem };
+      this.drop(c, first); yield { k: "V", s: st[first].sem };
+      if (mode === "arbitrator") yield { k: "V", s: this.manager };
+      if (this.finished(c)) return;
+    }
+  }
+
+  *chefMonitor(c, fair) {
+    const i = c.id, n = this.n;
+    for (let k = 0; ; k++) {
+      yield* this.prepare(c, k);
+      yield { k: "enter" };                        // pickup(i)
+      this.mstate[i] = "HUNGRY"; this.hungry(c);
+      if (fair) this.ticket[i] = this.nextTicket++;
+      this.test(i);
+      while (this.mstate[i] !== "COOKING") yield { k: "wait", i, line: "wait" };
+      yield { k: "exit" };
+      yield* this.cook(c);
+      yield { k: "enter" };                        // putdown(i)
+      this.mstate[i] = "PREPARING"; this.drop(c, i); this.drop(c, (i + 1) % n);
+      this.test((i + n - 1) % n); this.test((i + 1) % n);
+      yield { k: "exit" };
+      if (this.finished(c)) return;
+    }
+  }
+
+  ahead(j, i) { return this.mstate[j] === "HUNGRY" && this.ticket[j] < this.ticket[i]; }
+
+  test(i) {
+    const n = this.n, L = (i + n - 1) % n, R = (i + 1) % n, s = this.mstate;
+    const fair = this.cfg.strategy === "fair";
+    if (s[L] !== "COOKING" && s[i] === "HUNGRY" && s[R] !== "COOKING" &&
+        !(fair && (this.ahead(L, i) || this.ahead(R, i)))) {
+      s[i] = "COOKING";
+      const c = this.chefs[i];
+      this.take(c, i); this.take(c, R);
+      this.signal(i);
+    }
+  }
+
+  // ---- analysis ------------------------------------------------------------
+  waitForGraph() {
+    const adj = new Map();
+    for (const c of this.chefs) {
+      if (typeof c.waitingFor !== "number") continue;
+      if (!(c.status === "blocked" || c.spinning)) continue;
+      const hs = [...this.stations[c.waitingFor].holders].filter((h) => h !== c.id);
+      if (hs.length) adj.set(c.id, hs);
+    }
+    return adj;
+  }
+
+  findCycle() {
+    const adj = this.waitForGraph(), mark = new Map(), stack = [];
+    let cycle = null;
+    const dfs = (u) => {
+      mark.set(u, 1); stack.push(u);
+      for (const v of adj.get(u) || []) {
+        if (mark.get(v) === 1) { cycle = stack.slice(stack.indexOf(v)); return true; }
+        if (!mark.get(v) && adj.has(v) && dfs(v)) return true;
+      }
+      stack.pop(); mark.set(u, 2); return false;
+    };
+    for (const u of adj.keys()) if (!mark.get(u) && dfs(u)) break;
+    return cycle;
+  }
+
+  detect() {
+    if (this.deadlock) return;
+    const cycle = this.findCycle();
+    if (cycle && cycle.every((id) => this.chefs[id].status === "blocked")) {
+      this.deadlock = { t: this.now, cycle };
+      const desc = cycle.map((id) => `C${id} holds S${[...this.chefs[id].holds][0]}, waits S${this.chefs[id].waitingFor}`).join("; ");
+      this.log(null, `DEADLOCK: circular wait. ${desc}`, "crit");
+    }
+  }
+
+  holdAndWait() {
+    return this.chefs.filter((c) => c.state === "WAIT" && c.holds.size > 0 && c.holds.size < 2).length;
+  }
+
+  metrics() {
+    let sum = 0, cnt = 0, max = 0, served = 0;
+    const avgs = [];
+    for (const c of this.chefs) {
+      sum += c.waitSum; cnt += c.waits; served += c.served;
+      max = Math.max(max, c.waitMax, c.state === "WAIT" ? this.now - c.hungryAt : 0);
+      if (c.waits) avgs.push(c.waitSum / c.waits);
+    }
+    const mean = avgs.length ? avgs.reduce((x, y) => x + y, 0) / avgs.length : 0;
+    const sd = avgs.length > 1 ? Math.sqrt(avgs.reduce((x, y) => x + (y - mean) ** 2, 0) / avgs.length) : NaN;
+    return { avg: cnt ? sum / cnt : NaN, max, sd, served, cnt };
+  }
+}
+
+function runOnce(strategy, n, seed, opts = {}) {
+  const cfg = {
+    strategy, n, seed, prep: [1, 3], cook: [2, 5],
+    reach: strategy === "naive" ? [3, 6] : [0, 0], gap: 0.1, rush: false,
+    dishes: 15, profile: {}, log: false, ...opts,
+  };
+  const k = new Kitchen(cfg);
+  const LIMIT = 3000; // 3 s deadlock timeout, as in Section 11
+  while (k.now < LIMIT) {
+    k.advance(k.now + 1);
+    if (k.deadlock || k.chefs.every((c) => c.state === "DONE")) break;
+  }
+  const m = k.metrics();
+  const done = k.chefs.every((c) => c.state === "DONE");
+  return {
+    deadlocked: !done, detectedAt: k.deadlock ? k.deadlock.t : null,
+    makespan: done ? k.lastFinish : LIMIT, avg: m.avg, sd: m.sd, max: m.max,
+    violations: k.violations, served: k.chefs.map((c) => c.served),
+  };
+}
+if (typeof module !== "undefined") module.exports = { Kitchen, STRATEGIES, runOnce };
+</script>
+
+<script>
+"use strict";
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s).replace(/[&<>"]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch]));
+  const fmt = (x, d = 2) => (x === x && x !== null && Number.isFinite(x) ? x.toFixed(d) : "–");
+  const reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const MS_PER_SIM = 400; // real milliseconds per simulated millisecond at 1x
+
+  // Textbook starvation interleaving for Dijkstra's monitor (Section 15.2).
+  const STARVE = {
+    0: { off: true }, 4: { off: true },
+    1: { prep: [0.05, 0.05], cook: [4, 4], firstPrep: 0.05 },
+    3: { prep: [0.05, 0.05], cook: [4, 4], firstPrep: 2 },
+  };
+  const SCENES = [
+    { id: "race", label: "Race condition", strategy: "nosync", rush: true,
+      title: "1 · Race condition: no synchronization",
+      text: "Chefs read station_free[] and only later mark the station busy. Both neighbours pass the check in the same instant, so two chefs end up on one station. Watch the red RACE stations and the mutual-exclusion counter." },
+    { id: "deadlock", label: "Deadlock", strategy: "naive", rush: true,
+      title: "2 · Deadlock: naive semaphores",
+      text: "Every chef takes its left station, then reaches right. Each right station is already a neighbour's left one. The wait arrows close into a cycle and the kitchen freezes. Press Reset, then Step, to show it one event at a time." },
+    { id: "ordering", label: "Fix: resource ordering", strategy: "ordered", rush: true,
+      title: "3 · Fix 1: resource ordering (Listing 10.1)",
+      text: "Same semaphores, one change: take the lower-numbered station first. The last chef now asks for S0 before its own station, so one chef is always able to finish and the cycle never closes." },
+    { id: "arbitrator", label: "Fix: arbitrator", strategy: "arbitrator", rush: true,
+      title: "4 · Fix 2: arbitrator, a counting semaphore set to N − 1",
+      text: "The Kitchen Manager lets at most N − 1 chefs reach for stations. With N stations and N − 1 chefs reaching, at least one chef always gets both. The dots in the middle are the manager's free permits." },
+    { id: "monitor", label: "Fix: monitor", strategy: "monitor", rush: true,
+      title: "5 · Fix 3: monitor with condition variables (Listing 10.2)",
+      text: "Chefs call pickup() on the Kitchen Manager. test() grants both stations together, only when neither neighbour is cooking, so no chef ever holds one station while waiting. Watch state[] and self[i] in the internals panel." },
+    { id: "starvation", label: "Starvation", strategy: "monitor", rush: false, profile: STARVE,
+      title: "6 · Starvation: deadlock-free is not starvation-free",
+      text: "Chefs 0 and 4 are on a break. Chefs 1 and 3 skip preparation and cook 4 ms dishes, with shifts 2 ms apart. Whenever one finishes, the other is still cooking, so test(2) fails and the finisher asks again first. The kitchen never deadlocks, yet chef 2 waits forever." },
+    { id: "fair", label: "Fix: FIFO tickets", strategy: "fair", rush: false, profile: STARVE,
+      title: "7 · Fairness fix: monitor with FIFO tickets",
+      text: "Same timing. The monitor now records when each chef asked, and test() refuses a chef while a hungry neighbour asked earlier. Chef 1 can no longer jump ahead of chef 2, so chef 2 cooks as soon as chef 3 finishes." },
+  ];
+
+  let K = null, playing = false, speed = 1, lastTs = null, selected = null;
+  let activeScene = null, profile = {};
+  let geom = null, els = null, stationPos = [];
+  let lastPanel = 0, lastLogId = -1, lastRows = "";
+
+  // ---- setup ---------------------------------------------------------------
+  const sel = $("strategy");
+  for (const [key, s] of Object.entries(STRATEGIES)) {
+    const o = document.createElement("option"); o.value = key; o.textContent = s.name; sel.appendChild(o);
+  }
+  $("scenes").innerHTML = SCENES.map((s, i) =>
+    `<button type="button" class="scene" data-scene="${s.id}" aria-pressed="false"><b>${i + 1}</b>${esc(s.label)}</button>`).join("");
+
+  function cfgFromUI() {
+    const num = (id, d) => { const v = parseFloat($(id).value); return Number.isFinite(v) ? v : d; };
+    const lo = (a, b) => [Math.min(a, b), Math.max(a, b)];
+    const reach = num("reach", 1);
+    return {
+      strategy: sel.value, n: Math.round(num("n", 5)), seed: Math.round(num("seed", 7)),
+      prep: lo(Math.max(0, num("prep-lo", 1)), Math.max(0, num("prep-hi", 3))),
+      cook: lo(Math.max(0.5, num("cook-lo", 2)), Math.max(0.5, num("cook-hi", 5))),
+      reach: [reach * 0.75, reach * 1.25], gap: num("gap", 0.5), rush: $("rush").checked,
+      dishes: Infinity, profile,
+    };
+  }
+
+  function reset() {
+    K = new Kitchen(cfgFromUI());
+    if (selected !== null && selected >= K.n) selected = null;
+    lastLogId = -1;
+    buildRing(); buildCode(); renderAll();
+  }
+
+  function setPlaying(p) { playing = p; $("play").textContent = p ? "Pause" : "Play"; lastTs = null; }
+
+  function applyScene(id) {
+    const s = SCENES.find((x) => x.id === id);
+    activeScene = id;
+    sel.value = s.strategy; $("n").value = 5; $("n-out").value = 5; $("rush").checked = s.rush;
+    $("seed").value = 7; $("reach").value = 1; $("reach-out").value = "1 ms"; $("gap").value = 0.5; $("gap-out").value = "0.5 ms";
+    $("prep-lo").value = 1; $("prep-hi").value = 3; $("cook-lo").value = 2; $("cook-hi").value = 5;
+    profile = s.profile || {};
+    document.querySelectorAll(".scene").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.scene === id)));
+    $("callout-title").textContent = s.title; $("callout-text").textContent = s.text;
+    reset(); setPlaying(true);
+  }
+
+  function clearScene() {
+    activeScene = null;
+    document.querySelectorAll(".scene").forEach((b) => b.setAttribute("aria-pressed", "false"));
+    $("callout-title").textContent = "Custom setup";
+    $("callout-text").textContent = STRATEGIES[sel.value].verdict;
+  }
+
+  // ---- ring geometry ---------------------------------------------------------
+  function buildRing() {
+    const n = K.n, C = 320, R = 236;
+    const cr = Math.max(14, Math.min(40, (Math.PI * R / n) * 0.42));
+    const sh = Math.max(9, Math.min(19, cr * 0.5));
+    const Rs = R - cr * 0.15;
+    const ang = (i) => -Math.PI / 2 + (2 * Math.PI * i) / n;
+    const chefs = Array.from({ length: n }, (_, i) => ({ x: C + R * Math.cos(ang(i)), y: C + R * Math.sin(ang(i)), a: ang(i) }));
+    // station s sits between chef s-1 and chef s (chef i uses S_i and S_{i+1})
+    const stations = Array.from({ length: n }, (_, s) => {
+      const a = ang(s) - Math.PI / n;
+      return { x: C + Rs * Math.cos(a), y: C + Rs * Math.sin(a) };
+    });
+    geom = { n, C, R, cr, sh, chefs, stations };
+    stationPos = stations.map((p) => ({ x: p.x, y: p.y }));
+    const passR = Math.max(60, R - cr - sh * 2 - 26);
+    const lblSize = Math.max(10, Math.min(17, cr * 0.46));
+    const showState = cr >= 24;
+    let svg = `<defs>
+      <marker id="arw" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z"/></marker>
+      <marker id="arw-dead" class="dead" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z"/></marker>
+    </defs>
+    <circle class="pass" cx="${C}" cy="${C}" r="${passR}"/>
+    <g id="g-center"></g><g id="g-edges"></g><g id="g-stations">`;
+    for (let s = 0; s < n; s++) {
+      svg += `<g class="station" data-st="${s}"><rect x="${-sh}" y="${-sh}" width="${2 * sh}" height="${2 * sh}" rx="4"/><text class="slbl" font-size="${Math.max(9, sh * 0.8)}">S${s}</text><text class="race-lbl" y="${-sh - 9}" display="none">RACE</text></g>`;
+    }
+    svg += `</g><g id="g-chefs">`;
+    const circ = 2 * Math.PI * (cr + 5);
+    for (let i = 0; i < n; i++) {
+      const p = chefs[i];
+      const bx = C + (R + cr + 13) * Math.cos(p.a), by = C + (R + cr + 13) * Math.sin(p.a);
+      svg += `<g class="chef s-prep" data-chef="${i}" tabindex="0" role="button" aria-label="Chef ${i}">
+        <circle class="sel" cx="${p.x}" cy="${p.y}" r="${cr + 10}" display="none"/>
+        <circle class="disc" cx="${p.x}" cy="${p.y}" r="${cr}"/>
+        <circle class="prog" cx="${p.x}" cy="${p.y}" r="${cr + 5}" stroke-dasharray="${circ}" stroke-dashoffset="${circ}" transform="rotate(-90 ${p.x} ${p.y})"/>
+        <text class="lbl" x="${p.x}" y="${p.y - (showState ? 5 : 0)}" font-size="${lblSize}">C${i}</text>
+        ${showState ? `<text class="st" x="${p.x}" y="${p.y + 12}">PREP</text>` : ""}
+        <circle class="badge-bg" cx="${bx}" cy="${by}" r="11"/>
+        <text class="dish" x="${bx}" y="${by}">0</text>
+      </g>`;
+    }
+    svg += `</g>`;
+    $("ring").innerHTML = svg;
+    const q = (sel) => [...$("ring").querySelectorAll(sel)];
+    els = {
+      chefs: q("g.chef").map((g) => ({
+        g, prog: g.querySelector(".prog"), st: g.querySelector(".st"), dish: g.querySelector(".dish"),
+        sel: g.querySelector(".sel"), circ,
+      })),
+      stations: q("g.station").map((g) => ({ g, race: g.querySelector(".race-lbl") })),
+      edges: $("ring").querySelector("#g-edges"), center: $("ring").querySelector("#g-center"),
+    };
+    els.passR = passR;
+  }
+
+  function stationTarget(s) {
+    const st = K.stations[s], base = geom.stations[s];
+    if (st.holders.size !== 1) return base;
+    const h = geom.chefs[[...st.holders][0]];
+    return { x: base.x + (h.x - base.x) * 0.36, y: base.y + (h.y - base.y) * 0.36 };
+  }
+
+  function edgePoints(from, to, r1, r2) {
+    const dx = to.x - from.x, dy = to.y - from.y, d = Math.hypot(dx, dy) || 1;
+    return { x1: from.x + (dx / d) * r1, y1: from.y + (dy / d) * r1, x2: to.x - (dx / d) * r2, y2: to.y - (dy / d) * r2 };
+  }
+
+  function renderRing() {
+    const n = K.n, dead = K.deadlock ? new Set(K.deadlock.cycle) : null;
+    for (let s = 0; s < n; s++) {
+      const tgt = stationTarget(s), p = stationPos[s];
+      const f = reduceMotion ? 1 : 0.25;
+      p.x += (tgt.x - p.x) * f; p.y += (tgt.y - p.y) * f;
+      const st = K.stations[s], e = els.stations[s];
+      let cls = "station";
+      const race = st.holders.size > 1;
+      if (race) cls += " race";
+      else if (st.holders.size === 1) {
+        const h = K.chefs[[...st.holders][0]];
+        cls += h.state === "COOK" ? " held-cook" : " held-wait";
+      }
+      e.g.setAttribute("class", cls);
+      e.g.setAttribute("transform", `translate(${p.x.toFixed(1)} ${p.y.toFixed(1)})`);
+      e.race.setAttribute("display", race ? "inline" : "none");
+    }
+    for (let i = 0; i < n; i++) {
+      const c = K.chefs[i], e = els.chefs[i];
+      const sc = { PREP: "s-prep", WAIT: "s-wait", COOK: "s-cook", DONE: "s-done", OFF: "s-off" }[c.state];
+      e.g.setAttribute("class", `chef ${sc}${dead && dead.has(i) ? " dead" : ""}`);
+      if (e.st) e.st.textContent = { PREP: "PREP", WAIT: "WAIT", COOK: "COOK", DONE: "DONE", OFF: "BREAK" }[c.state];
+      e.dish.textContent = c.served;
+      e.sel.setAttribute("display", selected === i ? "inline" : "none");
+      let frac = 0;
+      if (c.status === "sleep" && (c.state === "PREP" || c.state === "COOK") && c.wakeAt > c.opStart) {
+        frac = Math.max(0, Math.min(1, (K.now - c.opStart) / (c.wakeAt - c.opStart)));
+      }
+      e.prog.setAttribute("stroke-dashoffset", (e.circ * (1 - frac)).toFixed(1));
+    }
+    // wait-for edges
+    let edges = "";
+    for (const c of K.chefs) {
+      if (typeof c.waitingFor !== "number") continue;
+      if (!(c.status === "blocked" || c.spinning)) continue;
+      const isDead = dead && dead.has(c.id);
+      const pts = edgePoints(geom.chefs[c.id], stationPos[c.waitingFor], geom.cr + 4, geom.sh + 5);
+      edges += `<line class="edge${isDead ? " dead" : ""}" x1="${pts.x1.toFixed(1)}" y1="${pts.y1.toFixed(1)}" x2="${pts.x2.toFixed(1)}" y2="${pts.y2.toFixed(1)}" marker-end="url(#${isDead ? "arw-dead" : "arw"})"/>`;
+    }
+    if (dead) {
+      for (const id of dead) for (const s of K.chefs[id].holds) {
+        const pts = edgePoints(geom.chefs[id], stationPos[s], geom.cr, geom.sh);
+        edges += `<line class="hold" x1="${pts.x1.toFixed(1)}" y1="${pts.y1.toFixed(1)}" x2="${pts.x2.toFixed(1)}" y2="${pts.y2.toFixed(1)}"/>`;
+      }
+    }
+    els.edges.innerHTML = edges;
+    renderCenter();
+  }
+
+  function renderCenter() {
+    const { C } = geom, strat = K.cfg.strategy;
+    let lines = [], extra = "";
+    if (strat === "nosync") lines = ["No manager", "chefs check flags", "and hope"];
+    else if (strat === "naive" || strat === "ordered") lines = ["Kitchen Manager", `${K.n} binary semaphores`, strat === "ordered" ? "lower number first" : "left station first"];
+    else if (strat === "arbitrator") {
+      const free = K.manager.value, total = K.n - 1;
+      lines = ["Kitchen Manager", `permits free: ${free} of ${total}`, `${K.manager.queue.length} chef(s) queued`];
+      const per = Math.min(total, 19), r = 5.5, gap = 15, w = (per - 1) * gap;
+      for (let j = 0; j < per; j++) extra += `<circle class="permit ${j < free ? "on" : "off"}" cx="${C - w / 2 + j * gap}" cy="${C + 44}" r="${r}"/>`;
+    } else {
+      const owner = K.mon.owner === null ? "free" : `held by C${K.mon.owner}`;
+      const waiting = K.cond.reduce((x, q) => x + q.length, 0);
+      lines = ["Kitchen Manager", `monitor lock: ${owner}`, `${waiting} chef(s) in self[i].wait()`];
+    }
+    const big = Math.max(15, Math.min(24, els.passR / 6));
+    els.center.innerHTML = `
+      <text class="center-title" x="${C}" y="${C - 22}" text-anchor="middle" font-size="${big}">${esc(lines[0])}</text>
+      <text class="center-sub" x="${C}" y="${C + 4}" text-anchor="middle" font-size="14">${esc(lines[1])}</text>
+      <text class="center-sub" x="${C}" y="${C + 24}" text-anchor="middle" font-size="14">${esc(lines[2])}</text>${extra}`;
+  }
+
+  // ---- code panel ------------------------------------------------------------
+  function buildCode() {
+    const code = STRATEGIES[K.cfg.strategy].code;
+    $("code").innerHTML = code.map(([key, text]) =>
+      `<li data-line="${key}"><code>${esc(text) || " "}</code><span class="chips"></span></li>`).join("");
+    $("strategy-title").textContent = STRATEGIES[K.cfg.strategy].name;
+  }
+
+  function renderCode() {
+    const by = new Map();
+    for (const c of K.chefs) {
+      if (c.state === "DONE" || c.state === "OFF" || c.line === null) continue;
+      if (!by.has(c.line)) by.set(c.line, []);
+      by.get(c.line).push(c);
+    }
+    const dead = K.deadlock ? new Set(K.deadlock.cycle) : null;
+    for (const li of $("code").children) {
+      const key = li.dataset.line, list = key ? by.get(key) || [] : [];
+      const html = list.map((c) => {
+        const cls = c.state === "WAIT" ? "wait" : c.state === "COOK" ? "cook" : "";
+        return `<span class="chip ${cls}${dead && dead.has(c.id) ? " crit" : ""}${selected === c.id ? " sel" : ""}">C${c.id}</span>`;
+      }).join("");
+      const chips = li.querySelector(".chips");
+      if (chips.innerHTML !== html) chips.innerHTML = html;
+      li.classList.toggle("hot", selected !== null && list.some((c) => c.id === selected));
+    }
+  }
+
+  // ---- internals -------------------------------------------------------------
+  const chipsOf = (list) => list.length ? list.map((t) => `C${t.id}`).join(" ") : "–";
+  function renderInternals() {
+    const strat = K.cfg.strategy, n = K.n;
+    let html = "", title = "Kitchen Manager internals", sub = "";
+    if (strat === "nosync") {
+      title = "Shared flags: station_free[]";
+      sub = "No lock protects these flags";
+      html = `<div class="cells">${K.stations.map((s) => `<div class="cell${s.holders.size > 1 ? " bad" : !s.free ? " busy" : ""}"><span class="k">S${s.id}</span><span class="v">${s.free ? "true" : "false"}</span><span class="v">on it: ${s.holders.size ? [...s.holders].map((h) => "C" + h).join(", ") : "–"}</span></div>`).join("")}</div>`;
+    } else if (strat === "naive" || strat === "ordered" || strat === "arbitrator") {
+      title = "Semaphores";
+      sub = "value, then the FIFO queue of blocked chefs";
+      html = `<div class="cells">${K.stations.map((s) => `<div class="cell${s.sem.value === 0 ? " busy" : ""}"><span class="k">station[${s.id}]</span><span class="v">value ${s.sem.value}</span><span class="v">queue ${chipsOf(s.sem.queue)}</span></div>`).join("")}</div>`;
+      if (strat === "arbitrator") html += `<div class="kv"><span>manager <b>${K.manager.value}</b></span><span>queue <b>${chipsOf(K.manager.queue)}</b></span></div>`;
+      if (strat === "ordered") html += `<div class="kv"><span>order_log_mutex <b>${K.logMutex.value}</b></span></div>`;
+    } else {
+      title = "Monitor KitchenManager";
+      sub = strat === "fair" ? "state[], waiting chefs and tickets" : "state[] and condition queues";
+      const letter = { PREPARING: "PREPARING", HUNGRY: "HUNGRY", COOKING: "COOKING" };
+      html = `<div class="kv"><span>lock <b>${K.mon.owner === null ? "free" : "C" + K.mon.owner}</b></span><span>entry queue <b>${chipsOf(K.mon.entry)}</b></span>${strat === "fair" ? `<span>next_ticket <b>${K.nextTicket}</b></span>` : ""}</div>`;
+      html += `<div class="cells">${K.mstate.map((st, i) => `<div class="cell${st === "COOKING" ? " busy" : ""}"><span class="k">state[${i}]</span><span class="v">${letter[st]}</span><span class="v">${K.cond[i].length ? "in self[" + i + "].wait()" : "&nbsp;"}</span>${strat === "fair" && st === "HUNGRY" ? `<span class="v">ticket ${K.ticket[i]}</span>` : ""}</div>`).join("")}</div>`;
+    }
+    $("internals-title").textContent = title;
+    $("internals-sub").textContent = sub;
+    $("internals").innerHTML = html;
+  }
+
+  // ---- metrics, coffman, chef board, log ----------------------------------
+  function renderTiles() {
+    const m = K.metrics();
+    const tiles = [
+      { label: "Dishes served", value: m.served, note: `${fmt(m.served / Math.max(K.now, 1e-9) * 100, 1)} per 100 ms` },
+      { label: "Average wait", value: fmt(m.avg), unit: "ms", note: "hungry to cooking" },
+      { label: "Fairness (σ of chef averages)", value: fmt(m.sd), unit: "ms", note: "lower is fairer" },
+      { label: "Longest wait", value: fmt(m.max), unit: "ms", note: "includes chefs still waiting", alert: K.deadlock },
+      { label: "Mutual-exclusion violations", value: K.violations, note: "two chefs on one station", alert: K.violations > 0 },
+      { label: "Hold and wait now", value: K.holdAndWait(), note: "chefs holding one station, waiting" },
+    ];
+    $("tiles").innerHTML = tiles.map((t) => `<div class="panel tile${t.alert ? " alert" : ""}"><span class="label">${esc(t.label)}</span><span class="value">${t.value}${t.unit ? ` <small>${t.unit}</small>` : ""}</span><span class="note">${esc(t.note)}</span></div>`).join("");
+  }
+
+  function renderStatus() {
+    const pill = $("status-pill"), text = $("status-text");
+    pill.className = "pill";
+    if (K.deadlock) {
+      pill.classList.add("bad");
+      text.textContent = `Deadlocked, frozen for ${fmt(K.now - K.deadlock.t, 1)} ms`;
+      const cyc = K.deadlock.cycle;
+      $("banner").hidden = false;
+      $("banner").innerHTML = `<b>Deadlock at t = ${fmt(K.deadlock.t, 3)} ms</b><span>Circular wait: ${cyc.map((id) => `C${id} holds S${[...K.chefs[id].holds][0]} and waits for S${K.chefs[id].waitingFor}`).join(" → ")} → back to C${cyc[0]}. No chef can ever continue.</span>`;
+    } else {
+      $("banner").hidden = true;
+      if (K.violations > 0) { pill.classList.add("bad"); text.textContent = `Running · ${K.violations} race${K.violations > 1 ? "s" : ""} so far`; }
+      else if (!playing) { text.textContent = K.now === 0 ? "Ready" : "Paused"; }
+      else { pill.classList.add("ok"); text.textContent = "Running · no deadlock"; }
+    }
+    $("clock").textContent = `t = ${K.now.toFixed(3)} ms`;
+  }
+
+  function renderCoffman() {
+    const s = STRATEGIES[K.cfg.strategy], hw = K.holdAndWait();
+    const cyc = K.deadlock ? K.deadlock.cycle : null;
+    const live = {
+      me: K.violations ? `observed: ${K.violations} violation(s)` : "observed: 0 violations",
+      hw: `now: ${hw} chef(s) holding one station and waiting`,
+      np: "",
+      cw: cyc ? `now: cycle ${cyc.map((i) => "C" + i).join(" → ")} → C${cyc[0]}` : "now: no cycle",
+    };
+    const rows = [["me", "Mutual exclusion"], ["hw", "Hold and wait"], ["np", "No preemption"], ["cw", "Circular wait"]];
+    $("coffman").innerHTML = rows.map(([k, name]) => {
+      const [cls, badge, why] = s.coffman[k];
+      const icon = cls === "broken" ? "✓" : cls === "danger" ? "!" : "●";
+      return `<div class="cf-row"><span class="name">${name}</span><span class="badge ${cls}"><span aria-hidden="true">${icon}</span>${esc(badge)}</span><span class="why">${esc(why)}</span>${live[k] ? `<span class="live">${esc(live[k])}</span>` : ""}</div>`;
+    }).join("");
+    $("verdict").textContent = s.verdict;
+  }
+
+  function renderChefs() {
+    const maxServed = Math.max(1, ...K.chefs.map((c) => c.served));
+    const label = { PREP: "Preparing", WAIT: "Waiting", COOK: "Cooking", DONE: "Done", OFF: "On break" };
+    const timing = (c) => {
+      const p = K.cfg.profile[c.id];
+      if (!p) return "normal";
+      if (p.off) return "on break";
+      return `no prep, ${p.cook[0]} ms dishes`;
+    };
+    const rows = K.chefs.map((c) => {
+      const curWait = c.state === "WAIT" ? K.now - c.hungryAt : 0;
+      const longest = Math.max(c.waitMax, curWait);
+      const holds = [...c.holds].map((s) => "S" + s).join(", ") || "–";
+      const w = Math.round((c.served / maxServed) * 90);
+      return `<tr data-chef="${c.id}"${selected === c.id ? ' class="sel"' : ""}><td class="mono">C${c.id}</td>
+        <td><span class="cstate ${c.state === "WAIT" ? "wait" : c.state === "COOK" ? "cook" : ""}"><i></i>${label[c.state]}</span></td>
+        <td class="mono">${holds}</td>
+        <td class="num"><span class="bar" style="width:${w}px"></span>${c.served}</td>
+        <td class="r">${c.waits ? fmt(c.waitSum / c.waits) + " ms" : "–"}</td>
+        <td class="r">${longest ? fmt(longest) + " ms" : "–"}</td>
+        <td>${timing(c)}</td></tr>`;
+    }).join("");
+    if (rows !== lastRows) { $("chef-rows").innerHTML = rows; lastRows = rows; }
+  }
+
+  function renderLog() {
+    const ev = K.events;
+    const newest = ev.length ? ev[ev.length - 1].id : -1;
+    if (newest === lastLogId) return;
+    lastLogId = newest;
+    const items = ev.slice(-120).reverse().map((e) =>
+      `<li class="${e.kind}"><span class="t">${e.t.toFixed(3)}</span><span class="c">${e.c === null ? "" : "C" + e.c}</span><span class="m">${esc(e.text)}</span></li>`).join("");
+    $("log").innerHTML = items || `<li><span class="t"></span><span class="c"></span><span class="m">Press Play or pick a step above.</span></li>`;
+  }
+
+  function renderPanels() { renderCode(); renderInternals(); renderTiles(); renderCoffman(); renderChefs(); renderLog(); }
+  function renderAll() { renderRing(); renderStatus(); renderPanels(); }
+
+  // ---- loop ----------------------------------------------------------------
+  function frame(ts) {
+    if (playing && lastTs !== null) {
+      const dt = Math.min(100, ts - lastTs);
+      K.advance(K.now + (dt * speed) / MS_PER_SIM);
+    }
+    lastTs = ts;
+    renderRing(); renderStatus();
+    if (ts - lastPanel > 120) { lastPanel = ts; renderPanels(); }
+    requestAnimationFrame(frame);
+  }
+
+  // ---- events --------------------------------------------------------------
+  $("scenes").addEventListener("click", (e) => { const b = e.target.closest(".scene"); if (b) applyScene(b.dataset.scene); });
+  $("play").addEventListener("click", () => setPlaying(!playing));
+  $("step").addEventListener("click", () => {
+    setPlaying(false);
+    const t = K.nextEventTime();
+    if (t !== Infinity) K.advance(t);
+    renderAll();
+  });
+  $("reset").addEventListener("click", () => { reset(); });
+  $("speed").addEventListener("change", (e) => { speed = parseFloat(e.target.value); });
+  const restartIds = ["strategy", "n", "prep-lo", "prep-hi", "cook-lo", "cook-hi", "reach", "gap", "rush", "seed"];
+  for (const id of restartIds) {
+    $(id).addEventListener(id === "n" || id === "reach" || id === "gap" ? "input" : "change", () => {
+      $("n-out").value = $("n").value;
+      $("reach-out").value = `${$("reach").value} ms`;
+      $("gap-out").value = `${$("gap").value} ms`;
+      if (id === "n") profile = {};
+      if (id === "strategy" || id === "n" || id === "rush") clearScene();
+      reset();
+    });
+  }
+  function selectChef(i) { selected = selected === i ? null : i; renderAll(); }
+  $("ring").addEventListener("click", (e) => { const g = e.target.closest("g.chef"); if (g) selectChef(+g.dataset.chef); });
+  $("ring").addEventListener("keydown", (e) => {
+    const g = e.target.closest("g.chef");
+    if (g && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); selectChef(+g.dataset.chef); }
+  });
+  // pointerdown: the rows re-render several times a second, which can swallow a click
+  $("chef-rows").addEventListener("pointerdown", (e) => {
+    const tr = e.target.closest("tr"); if (tr) selectChef(+tr.dataset.chef);
+  });
+
+  // ---- benchmark -------------------------------------------------------------
+  const BENCH = ["nosync", "naive", "ordered", "arbitrator", "monitor", "fair"];
+  const SERIES = [
+    { key: "ordered", name: "Semaphores, ordering", color: "var(--s1)" },
+    { key: "arbitrator", name: "Semaphores, arbitrator", color: "var(--s2)" },
+    { key: "monitor", name: "Monitor", color: "var(--s3)" },
+    { key: "fair", name: "Monitor, FIFO tickets", color: "var(--s4)" },
+  ];
+  const NS = [5, 10, 20];
+
+  function runBenchmark() {
+    const runs = Math.max(1, Math.min(100, Math.round(parseFloat($("bench-runs").value) || 20)));
+    const res = {};
+    for (const strat of BENCH) for (const n of NS) {
+      const out = [];
+      for (let r = 0; r < runs; r++) out.push(runOnce(strat, n, 1000 + r * 17 + n));
+      const ok = out.filter((o) => !o.deadlocked);
+      const mean = (arr, key) => { const v = arr.map((o) => o[key]).filter((x) => Number.isFinite(x)); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : NaN; };
+      const det = out.filter((o) => o.detectedAt !== null);
+      res[strat + n] = {
+        runs, deadlocks: out.length - ok.length, detected: mean(det, "detectedAt"),
+        violations: out.reduce((a, o) => a + o.violations, 0),
+        makespan: mean(ok, "makespan"), avg: mean(ok, "avg"), sd: mean(ok, "sd"), max: mean(ok, "max"),
+      };
+    }
+    return { res, runs };
+  }
+
+  function chartSVG(res, key, title, sub) {
+    const W = 460, H = 250, m = { l: 44, r: 10, t: 12, b: 34 };
+    const vals = [];
+    for (const n of NS) for (const s of SERIES) vals.push(res[s.key + n][key]);
+    const vmax = Math.max(...vals.filter(Number.isFinite), 0.001);
+    const step = niceStep(vmax / 4);
+    const top = Math.ceil(vmax / step) * step;
+    const y = (v) => m.t + (H - m.t - m.b) * (1 - v / top);
+    const gw = (W - m.l - m.r) / NS.length, bw = Math.min(24, (gw - 30) / SERIES.length - 2);
+    let g = "";
+    for (let v = 0; v <= top + 1e-9; v += step) {
+      g += `<line x1="${m.l}" x2="${W - m.r}" y1="${y(v)}" y2="${y(v)}" stroke="var(--grid)" stroke-width="1"/>`;
+      g += `<text x="${m.l - 8}" y="${y(v)}" text-anchor="end" dominant-baseline="central" font-size="11" fill="var(--muted)" font-family="var(--font-body)" style="font-variant-numeric:tabular-nums">${+v.toFixed(2)}</text>`;
+    }
+    NS.forEach((n, gi) => {
+      const gx = m.l + gi * gw + gw / 2, total = SERIES.length * bw + (SERIES.length - 1) * 2;
+      SERIES.forEach((s, si) => {
+        const v = res[s.key + n][key];
+        if (!Number.isFinite(v)) return;
+        const x = gx - total / 2 + si * (bw + 2), h = Math.max(0, y(0) - y(v)), r = Math.min(4, h, bw / 2);
+        const y0 = y(0), y1 = y(v);
+        const d = `M${x},${y0} V${y1 + r} Q${x},${y1} ${x + r},${y1} H${x + bw - r} Q${x + bw},${y1} ${x + bw},${y1 + r} V${y0} Z`;
+        g += `<path d="${d}" fill="${s.color}" data-tip="${esc(s.name)} · N = ${n}" data-val="${fmt(v)} ms"/>`;
+      });
+      g += `<text x="${gx}" y="${H - m.b + 18}" text-anchor="middle" font-size="12" fill="var(--ink-2)" font-family="var(--font-body)">N = ${n}</text>`;
+    });
+    g += `<line x1="${m.l}" x2="${W - m.r}" y1="${y(0)}" y2="${y(0)}" stroke="var(--line)" stroke-width="1"/>`;
+    return `<div class="chart"><div class="chart-title">${esc(title)}</div><div class="chart-sub">${esc(sub)}</div><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(title)}">${g}</svg><div class="tip" hidden></div></div>`;
+  }
+
+  function niceStep(raw) {
+    const p = Math.pow(10, Math.floor(Math.log10(raw))), f = raw / p;
+    return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 5 ? 5 : 10) * p;
+  }
+
+  function renderBench({ res, runs }) {
+    const rows = [];
+    for (const n of NS) for (const strat of BENCH) {
+      const r = res[strat + n];
+      const dl = r.deadlocks ? `${r.deadlocks}/${r.runs}${Number.isFinite(r.detected) ? ` (at ${fmt(r.detected, 1)} ms)` : " (timeout)"}` : `0/${r.runs}`;
+      rows.push(`<tr><td>${esc(STRATEGIES[strat].name)}</td><td class="r">${n}</td><td class="r">${dl}</td><td class="r">${r.violations}</td>
+        <td class="r">${r.deadlocks === r.runs ? "never" : fmt(r.makespan, 1) + " ms"}</td><td class="r">${fmt(r.avg)}</td><td class="r">${fmt(r.sd)}</td><td class="r">${fmt(r.max)}</td></tr>`);
+    }
+    const legend = `<div class="series-legend">${SERIES.map((s) => `<span><i style="background:${s.color}"></i>${esc(s.name)}</span>`).join("")}</div>`;
+    $("bench-out").innerHTML = `
+      <div style="display:grid;gap:12px">
+        ${legend}
+        <div class="charts">
+          ${chartSVG(res, "avg", "Average wait per dish", "ms from hungry to cooking")}
+          ${chartSVG(res, "sd", "Fairness", "σ of per-chef average wait, ms (lower is fairer)")}
+        </div>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Strategy</th><th class="r">N</th><th class="r">Deadlocked runs</th><th class="r">ME violations</th><th class="r">Completion</th><th class="r">Avg wait, ms</th><th class="r">Fairness σ, ms</th><th class="r">Longest wait, ms</th></tr></thead>
+          <tbody>${rows.join("")}</tbody>
+        </table></div>
+        <p class="hint">${runs} seeded run(s) per cell. Wait and fairness average the runs that finished; "–" means every run deadlocked. The model detects a deadlock the moment the wait-for cycle closes; the Python script uses the report's 3 s timeout instead.</p>
+      </div>`;
+    for (const ch of $("bench-out").querySelectorAll(".chart")) {
+      const tip = ch.querySelector(".tip");
+      ch.addEventListener("mousemove", (e) => {
+        const p = e.target.closest("path[data-tip]");
+        if (!p) { tip.hidden = true; return; }
+        const box = ch.getBoundingClientRect();
+        tip.innerHTML = `${p.dataset.tip}<br><b>${p.dataset.val}</b>`;
+        tip.hidden = false;
+        tip.style.left = Math.min(box.width - 150, e.clientX - box.left + 12) + "px";
+        tip.style.top = (e.clientY - box.top - 40) + "px";
+      });
+      ch.addEventListener("mouseleave", () => { tip.hidden = true; });
+    }
+  }
+
+  $("bench-go").addEventListener("click", () => {
+    const b = $("bench-go");
+    b.disabled = true; b.textContent = "Running…";
+    setTimeout(() => { renderBench(runBenchmark()); b.disabled = false; b.textContent = "Run benchmark"; }, 30);
+  });
+
+  // ---- start -----------------------------------------------------------------
+  applyScene("deadlock");
+  setPlaying(false);
+  K.advance(2.2);       // open on a frozen kitchen so the first view shows the problem
+  renderAll();
+  renderBench(runBenchmark());
+  requestAnimationFrame(frame);
+})();
+</script>
