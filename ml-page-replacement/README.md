@@ -18,6 +18,12 @@ Only Python 3.10+, NumPy and Matplotlib are needed.
 
 ## Run it
 
+**Interactive demo:** open `web/index.html` in any browser (no install). It
+runs FIFO, LRU, LFU, CLOCK, ARC, LeCaR, OPT and the learned policy side by
+side on the same references. You can watch the page faults, the memory frames
+and, for the learned policy, the sampled pages and scores behind each
+eviction. The model inside it is exported by `python3 -m mlpaging.export`.
+
 ```bash
 cd ml-page-replacement
 python3 -m mlpaging verify            # FIFO 15, LRU 12, OPT 9 on the textbook string

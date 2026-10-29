@@ -1,0 +1,734 @@
+<title>Learned Paging Simulator</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: an OS memory console. A control strip on top; the policy race on the
+   left (every policy replaying the same references at once); the selected
+   policy's page frames and, for the learned policy, its sampled candidates
+   on the right; the reference tape underneath. */
+:root {
+  --bg: #eef0ee;
+  --surface: #fbfcfb;
+  --surface-2: #f1f3f1;
+  --ink: #111513;
+  --ink-2: #48514c;
+  --muted: #6e7872;
+  --line: #d3d9d5;
+  --line-2: #e4e8e5;
+  --accent: #1f6f5c;
+  --accent-ink: #ffffff;
+  --accent-soft: #dcefe8;
+  --hit: #0ca30c;
+  --miss: #d03b3b;
+  --load: #fab219;
+  --on-status: #0b0f0c;
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100;
+  --s5: #e87ba4; --s6: #008300; --s7: #6250d6; --opt: #898781;
+  --font-display: "IBM Plex Sans Condensed", "Arial Narrow", sans-serif;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --r: 6px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e1110; --surface: #161a18; --surface-2: #1d2220; --ink: #e8ece9; --ink-2: #b1bab4;
+    --muted: #86908a; --line: #2d3430; --line-2: #232926; --accent: #6cc4a8; --accent-ink: #0b1310;
+    --accent-soft: #1b3129; --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
+    --s5: #d55181; --s6: #008300; --s7: #9085e9; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e1110; --surface: #161a18; --surface-2: #1d2220; --ink: #e8ece9; --ink-2: #b1bab4;
+  --muted: #86908a; --line: #2d3430; --line-2: #232926; --accent: #6cc4a8; --accent-ink: #0b1310;
+  --accent-soft: #1b3129; --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
+  --s5: #d55181; --s6: #008300; --s7: #9085e9; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { background: var(--bg); color: var(--ink); }
+body {
+  margin: 0; font-family: var(--font-body); font-size: 15px; line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 20px 48px;
+}
+.wrap { max-width: 1320px; margin: 0 auto; display: grid; gap: 16px; }
+.wrap > *, .board > * { min-width: 0; }
+h1, h2, h3 { font-family: var(--font-display); margin: 0; text-wrap: balance; }
+h1 { font-size: clamp(28px, 4vw, 40px); line-height: 1.05; letter-spacing: 0.005em; }
+h2 { font-size: 20px; }
+h3 { font-size: 14px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-2); }
+p { margin: 0; }
+.eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.lede { color: var(--ink-2); max-width: 78ch; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); }
+.pad { padding: 14px 16px; }
+.mono { font-family: var(--font-mono); }
+.num { font-variant-numeric: tabular-nums; }
+
+.controls { display: flex; flex-wrap: wrap; gap: 12px 18px; align-items: end; }
+.field { display: grid; gap: 4px; font-size: 13px; color: var(--ink-2); min-width: 0; }
+.field .row { display: flex; gap: 8px; align-items: center; }
+select, input[type="number"] {
+  font: 500 14px var(--font-body); color: var(--ink); background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--r); padding: 7px 8px; max-width: 100%;
+}
+input[type="number"] { width: 82px; }
+input[type="range"] { accent-color: var(--accent); width: 150px; }
+output { font-family: var(--font-mono); color: var(--ink); font-size: 13px; }
+.btns { display: flex; gap: 8px; flex-wrap: wrap; }
+button.btn {
+  font: 600 14px/1 var(--font-body); padding: 10px 14px; border-radius: var(--r); border: 1px solid var(--line);
+  background: var(--surface); color: var(--ink); cursor: pointer;
+}
+button.btn:hover { border-color: var(--accent); }
+button.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); min-width: 90px; }
+button:focus-visible, select:focus-visible, input:focus-visible, .race-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.clock { font-family: var(--font-mono); font-size: 14px; color: var(--ink-2); margin-left: auto; align-self: center; }
+
+.board { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 16px; align-items: start; }
+@media (max-width: 980px) { .board { grid-template-columns: minmax(0, 1fr); } }
+.head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; padding: 12px 16px 8px; }
+.head small { color: var(--muted); font-size: 12px; }
+
+.race { display: grid; gap: 2px; padding: 4px 8px 12px; }
+.race-row {
+  display: grid; grid-template-columns: 112px minmax(0, 1fr) 76px 64px; gap: 10px; align-items: center;
+  padding: 7px 8px; border-radius: 5px; cursor: pointer; border: 1px solid transparent;
+}
+.race-row:hover { background: var(--surface-2); }
+.race-row.sel { background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 40%, transparent); }
+.race-row .name { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 14px; white-space: nowrap; }
+.race-row .key { width: 10px; height: 10px; border-radius: 2px; flex: none; }
+.race-row .track { height: 14px; background: var(--surface-2); border-radius: 0 3px 3px 0; position: relative; overflow: hidden; }
+.race-row .fill { position: absolute; inset: 0 auto 0 0; border-radius: 0 3px 3px 0; }
+.race-row .v { font-family: var(--font-mono); font-size: 13px; text-align: right; font-variant-numeric: tabular-nums; }
+.race-row .d { font-family: var(--font-mono); font-size: 12px; text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
+.race-row.ours .name::after { content: "ours"; font: 600 10px/1 var(--font-mono); padding: 3px 5px; border-radius: 3px; background: var(--accent); color: var(--accent-ink); letter-spacing: 0.04em; }
+.race-head { display: grid; grid-template-columns: 112px minmax(0, 1fr) 76px 64px; gap: 10px; padding: 0 8px; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+.race-head span:nth-child(n+3) { text-align: right; }
+
+.frames { display: grid; grid-template-columns: repeat(auto-fill, minmax(46px, 1fr)); gap: 5px; padding: 0 16px 14px; }
+.frame {
+  border: 1px solid var(--line); border-radius: 5px; padding: 6px 4px; text-align: center; font-family: var(--font-mono);
+  font-size: 13px; background: var(--surface); min-width: 0; overflow: hidden;
+}
+.frame small { display: block; font-size: 10px; color: var(--muted); }
+.frame.empty { color: var(--muted); border-style: dashed; }
+.frame.hit { background: color-mix(in srgb, var(--hit) 22%, var(--surface)); border-color: var(--hit); }
+.frame.load { background: color-mix(in srgb, var(--load) 35%, var(--surface)); border-color: var(--load); }
+.status { padding: 0 16px 12px; font-size: 14px; display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; }
+.tag { font: 600 12px/1 var(--font-mono); padding: 5px 8px; border-radius: 999px; border: 1px solid var(--line); }
+.tag.hit { background: color-mix(in srgb, var(--hit) 18%, var(--surface)); border-color: var(--hit); }
+.tag.miss { background: color-mix(in srgb, var(--miss) 14%, var(--surface)); border-color: var(--miss); color: var(--ink); }
+.more { padding: 0 16px 12px; font-size: 12px; color: var(--muted); }
+
+.why { border-top: 1px solid var(--line-2); padding: 12px 16px 14px; display: grid; gap: 10px; }
+.why p { font-size: 14px; color: var(--ink-2); }
+.why .kv { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--ink-2); }
+.why .kv b { font-family: var(--font-mono); color: var(--ink); }
+.meter { height: 8px; border-radius: 999px; background: color-mix(in srgb, var(--s7) 25%, var(--surface-2)); position: relative; width: 160px; display: inline-block; vertical-align: middle; }
+.meter i { position: absolute; inset: 0 auto 0 0; border-radius: 999px; background: var(--s7); }
+.table-wrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th, td { padding: 5px 8px; border-bottom: 1px solid var(--line-2); text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+th { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); font-weight: 600; }
+th:first-child, td:first-child { text-align: left; }
+tr.victim td { background: color-mix(in srgb, var(--miss) 12%, var(--surface)); font-weight: 600; }
+.scorebar { display: inline-block; height: 8px; background: var(--s7); border-radius: 0 2px 2px 0; vertical-align: middle; margin-right: 6px; }
+
+.tape { padding: 0 16px 14px; overflow-x: auto; }
+.tape ol { list-style: none; display: flex; gap: 3px; margin: 0; padding: 0; min-width: max-content; }
+.tape li { display: grid; gap: 2px; justify-items: center; font-family: var(--font-mono); font-size: 12px; }
+.tape li span { min-width: 34px; padding: 4px 3px; text-align: center; border-radius: 4px; border: 1px solid var(--line); background: var(--surface); }
+.tape li.now span { outline: 2px solid var(--accent); outline-offset: 1px; }
+.tape li em { font-style: normal; font-size: 10px; font-weight: 600; }
+.tape li em.f { color: var(--miss); }
+.tape li em.h { color: var(--hit); }
+
+.classic { padding: 0 16px 14px; overflow-x: auto; }
+.classic table { width: auto; font-family: var(--font-mono); }
+.classic td, .classic th { text-align: center; padding: 4px 7px; border: 1px solid var(--line-2); }
+.classic td.f { color: var(--miss); font-weight: 600; }
+.classic td.new { background: color-mix(in srgb, var(--load) 35%, var(--surface)); }
+footer { font-size: 13px; color: var(--muted); display: grid; gap: 6px; }
+@media (max-width: 520px) {
+  .race-row, .race-head { grid-template-columns: 92px minmax(0, 1fr) 62px 52px; gap: 6px; }
+}
+</style>
+
+<div class="wrap">
+  <header style="display:grid;gap:6px">
+    <div class="eyebrow">OS memory management · Review 1 project</div>
+    <h1>Learned Paging Simulator</h1>
+    <p class="lede">Every policy replays the same page references at the same time. The learned policy was trained offline to imitate Belady's OPT; on each page fault it scores a sample of resident pages, evicts the one least likely to be needed soon, and falls back to LRU when the model is unsure or keeps being wrong.</p>
+    <p class="eyebrow" style="text-transform:none;letter-spacing:0">Rajveer Singh Chopra</p>
+  </header>
+
+  <section class="panel pad" aria-label="Controls" style="display:grid;gap:12px">
+    <div class="controls">
+      <label class="field" for="workload">Workload
+        <select id="workload">
+          <option value="textbook">Textbook string (20 references)</option>
+          <option value="loop">Loop larger than memory</option>
+          <option value="zipf">Skewed popularity (Zipf)</option>
+          <option value="phase">Phase change</option>
+          <option value="scanhot">Scan plus hot set</option>
+          <option value="mixed">Mixed: loop + Zipf</option>
+        </select>
+      </label>
+      <div class="field">
+        <label for="frames">Memory frames</label>
+        <div class="row"><input type="number" id="frames" min="1" max="2000" step="1" value="3"><output id="frames-pct">15% of pages</output></div>
+      </div>
+      <label class="field" for="speed">Speed
+        <select id="speed">
+          <option value="1">1 reference / s</option>
+          <option value="3" selected>3 / s</option>
+          <option value="20">20 / s</option>
+          <option value="200">200 / s</option>
+          <option value="2000">2,000 / s</option>
+          <option value="20000">20,000 / s</option>
+        </select>
+      </label>
+      <label class="field" for="k">Learned: pages sampled per fault
+        <select id="k">
+          <option value="8">8</option>
+          <option value="16">16</option>
+          <option value="32" selected>32 (tuned)</option>
+        </select>
+      </label>
+      <label class="field" for="seed">Seed <input type="number" id="seed" min="1" max="99999" value="7"></label>
+    </div>
+    <div class="controls">
+      <div class="btns">
+        <button class="btn primary" id="play" type="button">Play</button>
+        <button class="btn" id="step" type="button">Step</button>
+        <button class="btn" id="finish" type="button">Run to end</button>
+        <button class="btn" id="reset" type="button">Reset</button>
+      </div>
+      <span class="clock num" id="clock"></span>
+    </div>
+  </section>
+
+  <div class="board">
+    <section class="panel" aria-label="Policy race">
+      <div class="head"><h3>Page faults so far</h3><small>Click a policy to inspect it</small></div>
+      <div class="race-head"><span>Policy</span><span>Faults</span><span>Count</span><span>vs LRU</span></div>
+      <div class="race" id="race" role="listbox" aria-label="Policies"></div>
+    </section>
+
+    <section class="panel" aria-label="Selected policy">
+      <div class="head"><h3 id="sel-title">Frames</h3><small id="sel-sub"></small></div>
+      <div class="status" id="status"></div>
+      <div class="frames" id="frames-view"></div>
+      <div class="more" id="frames-more" hidden></div>
+      <div class="classic" id="classic" hidden></div>
+      <div class="why" id="why" hidden></div>
+    </section>
+  </div>
+
+  <section class="panel" aria-label="Reference string">
+    <div class="head"><h3>Reference string</h3><small>F = page fault, H = hit, for the selected policy</small></div>
+    <div class="tape"><ol id="tape"></ol></div>
+  </section>
+
+  <footer>
+    <p>Model: logistic regression with 9 parameters, trained on <span id="rows"></span> rows labelled by OPT (label: next use more than 2 × memory size away). Features per page: age, access count, last three gaps, mean gap, age ÷ mean gap. Same code as <span class="mono">mlpaging/learned.py</span> in the project.</p>
+    <p>OPT knows the future, so it is the lower bound on faults, not a usable policy.</p>
+  </footer>
+</div>
+
+<script>
+"use strict";
+// Trained by `python3 -m mlpaging.export` (logistic regression, horizon 2 x C).
+const MODEL = {"features": ["age", "count", "gap1", "gap2", "gap3", "mean_gap", "age_over_gap", "has_gap"],
+  "weights": [0.2308512859375677, 0.08614118576060052, 0.1478872605910588, 0.22419167629105455, 0.2519189703719372, 0.16225389771383122, -0.2005505162180408, -1.7726282540109795],
+  "bias": -0.2526316818701606, "rows": 474673, "threshold": 0.5};
+
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// ------------------------------------------------------------------ traces
+function zipfSampler(rng, n, alpha) {
+  const cdf = new Float64Array(n);
+  let s = 0;
+  for (let i = 0; i < n; i++) { s += 1 / Math.pow(i + 1, alpha); cdf[i] = s; }
+  for (let i = 0; i < n; i++) cdf[i] /= s;
+  return () => {
+    const u = rng(); let lo = 0, hi = n - 1;
+    while (lo < hi) { const m = (lo + hi) >> 1; if (cdf[m] < u) lo = m + 1; else hi = m; }
+    return lo;
+  };
+}
+function perm(rng, n) {
+  const a = Array.from({ length: n }, (_, i) => i);
+  for (let i = n - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+  return a;
+}
+function dense(pages) {
+  const id = new Map();
+  return pages.map((p) => { if (!id.has(p)) id.set(p, id.size); return id.get(p); });
+}
+const TRACES = {
+  textbook: () => [7, 0, 1, 2, 0, 3, 0, 4, 2, 3, 0, 3, 2, 1, 2, 0, 1, 7, 0, 1],
+  loop: (rng, n = 20000) => {
+    const N = 400;
+    return dense(Array.from({ length: n }, (_, t) => rng() < 0.02 ? Math.floor(rng() * N) : t % N));
+  },
+  zipf: (rng, n = 20000) => {
+    const N = 3000, z = zipfSampler(rng, N, 0.9), p = perm(rng, N);
+    return dense(Array.from({ length: n }, () => p[z()]));
+  },
+  phase: (rng, n = 20000) => {
+    const phases = 6, ws = 300, N = 3000, per = Math.floor(n / phases), out = [];
+    for (let f = 0; f < phases; f++) {
+      const region = perm(rng, N).slice(0, ws), z = zipfSampler(rng, ws, 0.6);
+      for (let i = 0; i < per; i++) out.push(region[z()]);
+    }
+    return dense(out);
+  },
+  scanhot: (rng, n = 20000) => {
+    const hot = 200, z = zipfSampler(rng, hot, 0.8), out = [];
+    let cold = hot;
+    while (out.length < n) {
+      for (let i = 0; i < 1000 && out.length < n; i++) out.push(z());
+      for (let i = 0; i < 400 && out.length < n; i++) out.push(cold++);
+    }
+    return dense(out);
+  },
+  mixed: (rng, n = 20000) => {
+    const L = 300, Z = 1500, z = zipfSampler(rng, Z, 0.9), p = perm(rng, Z), out = [];
+    let li = 0;
+    for (let i = 0; i < n; i++) out.push(rng() < 0.5 ? (li++ % L) : L + p[z()]);
+    return dense(out);
+  },
+};
+
+// ---------------------------------------------------------------- policies
+// access(page, t) -> { hit, victim }  (victim is null when nothing was evicted)
+class FIFO {
+  constructor(c) { this.c = c; this.q = []; this.h = 0; this.res = new Set(); }
+  access(p) {
+    if (this.res.has(p)) return { hit: true, victim: null };
+    let v = null;
+    if (this.res.size >= this.c) { v = this.q[this.h++]; this.res.delete(v); }
+    this.q.push(p); this.res.add(p);
+    return { hit: false, victim: v };
+  }
+}
+class LRU {
+  constructor(c) { this.c = c; this.m = new Map(); }
+  access(p) {
+    if (this.m.has(p)) { this.m.delete(p); this.m.set(p, 1); return { hit: true, victim: null }; }
+    let v = null;
+    if (this.m.size >= this.c) { v = this.m.keys().next().value; this.m.delete(v); }
+    this.m.set(p, 1);
+    return { hit: false, victim: v };
+  }
+}
+class LFU {   // in-memory counts, ties to the least recently used
+  constructor(c) { this.c = c; this.f = new Map(); this.last = new Map(); }
+  access(p, t) {
+    if (this.f.has(p)) { this.f.set(p, this.f.get(p) + 1); this.last.set(p, t); return { hit: true, victim: null }; }
+    let v = null;
+    if (this.f.size >= this.c) {
+      let bf = Infinity, bl = Infinity;
+      for (const [q, f] of this.f) { const l = this.last.get(q); if (f < bf || (f === bf && l < bl)) { bf = f; bl = l; v = q; } }
+      this.f.delete(v); this.last.delete(v);
+    }
+    this.f.set(p, 1); this.last.set(p, t);
+    return { hit: false, victim: v };
+  }
+}
+class CLOCK {
+  constructor(c) { this.c = c; this.frames = []; this.ref = []; this.where = new Map(); this.hand = 0; }
+  access(p) {
+    const i = this.where.get(p);
+    if (i !== undefined) { this.ref[i] = 1; return { hit: true, victim: null }; }
+    let v = null, idx;
+    if (this.frames.length < this.c) { idx = this.frames.length; this.frames.push(p); this.ref.push(1); }
+    else {
+      while (this.ref[this.hand]) { this.ref[this.hand] = 0; this.hand = (this.hand + 1) % this.c; }
+      idx = this.hand; v = this.frames[idx]; this.where.delete(v);
+      this.frames[idx] = p; this.ref[idx] = 1; this.hand = (this.hand + 1) % this.c;
+    }
+    this.where.set(p, idx);
+    return { hit: false, victim: v };
+  }
+}
+class ARC {   // Megiddo and Modha, FAST 2003
+  constructor(c) { this.c = c; this.t1 = new Map(); this.t2 = new Map(); this.b1 = new Map(); this.b2 = new Map(); this.p = 0; }
+  first(m) { return m.keys().next().value; }
+  replace(x) {
+    let v;
+    if (this.t1.size && ((this.b2.has(x) && this.t1.size === this.p) || this.t1.size > this.p)) {
+      v = this.first(this.t1); this.t1.delete(v); this.b1.set(v, 1);
+    } else { v = this.first(this.t2); this.t2.delete(v); this.b2.set(v, 1); }
+    return v;
+  }
+  access(x) {
+    const { t1, t2, b1, b2, c } = this;
+    if (t1.has(x)) { t1.delete(x); t2.set(x, 1); return { hit: true, victim: null }; }
+    if (t2.has(x)) { t2.delete(x); t2.set(x, 1); return { hit: true, victim: null }; }
+    let v = null;
+    if (b1.has(x)) {
+      this.p = Math.min(c, this.p + Math.max(b2.size / b1.size, 1));
+      v = this.replace(x); b1.delete(x); t2.set(x, 1); return { hit: false, victim: v };
+    }
+    if (b2.has(x)) {
+      this.p = Math.max(0, this.p - Math.max(b1.size / b2.size, 1));
+      v = this.replace(x); b2.delete(x); t2.set(x, 1); return { hit: false, victim: v };
+    }
+    const l1 = t1.size + b1.size;
+    if (l1 === c) {
+      if (t1.size < c) { b1.delete(this.first(b1)); v = this.replace(x); }
+      else { v = this.first(t1); t1.delete(v); }
+    } else {
+      const total = l1 + t2.size + b2.size;
+      if (total >= c) { if (total === 2 * c) b2.delete(this.first(b2)); v = this.replace(x); }
+    }
+    t1.set(x, 1);
+    return { hit: false, victim: v };
+  }
+}
+class LeCaR {   // Vietri et al., HotStorage 2018
+  constructor(c, rng) {
+    this.c = c; this.rng = rng; this.rec = new Map(); this.f = new Map(); this.last = new Map();
+    this.hl = new Map(); this.hf = new Map(); this.w = [0.5, 0.5]; this.d = Math.pow(0.005, 1 / c); this.lr = 0.45;
+  }
+  access(p, t) {
+    if (this.f.has(p)) {
+      this.rec.delete(p); this.rec.set(p, 1); this.f.set(p, this.f.get(p) + 1); this.last.set(p, t);
+      return { hit: true, victim: null };
+    }
+    let f0 = 1;
+    for (const [hist, other] of [[this.hl, 1], [this.hf, 0]]) {
+      if (hist.has(p)) {
+        const [te, f] = hist.get(p); hist.delete(p);
+        this.w[other] *= Math.exp(this.lr * Math.pow(this.d, t - te));
+        const s = this.w[0] + this.w[1]; this.w = [this.w[0] / s, this.w[1] / s]; f0 = f + 1; break;
+      }
+    }
+    let v = null;
+    if (this.f.size >= this.c) {
+      const useLRU = this.rng() < this.w[0];
+      if (useLRU) v = this.rec.keys().next().value;
+      else {
+        let bf = Infinity, bl = Infinity;
+        for (const [q, f] of this.f) { const l = this.last.get(q); if (f < bf || (f === bf && l < bl)) { bf = f; bl = l; v = q; } }
+      }
+      const hist = useLRU ? this.hl : this.hf;
+      hist.set(v, [t, this.f.get(v)]);
+      if (hist.size > this.c) hist.delete(hist.keys().next().value);
+      this.rec.delete(v); this.f.delete(v); this.last.delete(v);
+    }
+    this.rec.set(p, 1); this.f.set(p, f0); this.last.set(p, t);
+    return { hit: false, victim: v };
+  }
+}
+class OPT {   // Belady: evict the page used furthest in the future
+  constructor(c, trace) {
+    this.c = c; this.cur = new Map(); this.nxt = new Int32Array(trace.length);
+    const seen = new Map();
+    for (let t = trace.length - 1; t >= 0; t--) { this.nxt[t] = seen.has(trace[t]) ? seen.get(trace[t]) : trace.length + trace[t]; seen.set(trace[t], t); }
+  }
+  access(p, t) {
+    const hit = this.cur.has(p);
+    let v = null;
+    if (!hit && this.cur.size >= this.c) {
+      let best = -1;
+      for (const [q, n] of this.cur) if (n > best) { best = n; v = q; }
+      this.cur.delete(v);
+    }
+    this.cur.set(p, this.nxt[t]);
+    return { hit, victim: v };
+  }
+}
+class Learned {
+  constructor(c, rng, k) {
+    this.c = c; this.rng = rng; this.k = k;
+    this.last = new Map(); this.count = new Map(); this.gaps = new Map(); this.gsum = new Map();
+    this.res = []; this.pos = new Map(); this.order = new Map();
+    this.hModel = new Map(); this.hLRU = new Map(); this.wModel = 0.5; this.d = Math.pow(0.005, 1 / c); this.lr = 0.45;
+    this.decision = null;
+  }
+  touch(p, t) {
+    const n = this.count.get(p) || 0;
+    if (n) {
+      const g = t - this.last.get(p), gs = this.gaps.get(p);
+      gs.unshift(g); if (gs.length > 3) gs.pop();
+      this.gsum.set(p, this.gsum.get(p) + g);
+    } else { this.gaps.set(p, []); this.gsum.set(p, 0); }
+    this.count.set(p, n + 1); this.last.set(p, t);
+  }
+  features(p, t) {   // identical to Meta.row in mlpaging/learned.py
+    const c = this.c, age = t - this.last.get(p), fAge = Math.log1p(age / c);
+    const cnt = this.count.get(p), nGaps = cnt - 1, gs = this.gaps.get(p);
+    const g = [0, 1, 2].map((j) => (nGaps > j ? Math.log1p(gs[j] / c) : fAge));
+    if (nGaps > 0) {
+      const mean = this.gsum.get(p) / nGaps;
+      return { age, cnt, mean, x: [fAge, Math.log1p(cnt), ...g, Math.log1p(mean / c), Math.log1p(age) - Math.log1p(mean), 1] };
+    }
+    return { age, cnt, mean: null, x: [fAge, Math.log1p(cnt), ...g, Math.log1p(age / c), 0, 0] };
+  }
+  score(x) {
+    let z = MODEL.bias;
+    for (let i = 0; i < x.length; i++) z += MODEL.weights[i] * x[i];
+    return 1 / (1 + Math.exp(-z));
+  }
+  evict(t) {
+    const n = this.res.length, k = Math.min(this.k, n);
+    const useModel = this.rng() < this.wModel;
+    const info = { t, useModel, wModel: this.wModel, sample: [], fallback: false, by: "LRU" };
+    let v = null, hist = this.hLRU;
+    if (useModel) {
+      const picked = new Set();
+      while (picked.size < k) picked.add(Math.floor(this.rng() * n));
+      let best = -1;
+      for (const i of picked) {
+        const p = this.res[i], f = this.features(p, t), s = this.score(f.x);
+        info.sample.push({ p, age: f.age, cnt: f.cnt, mean: f.mean, s });
+        if (s > best) { best = s; v = p; }
+      }
+      if (best < MODEL.threshold) { info.fallback = true; v = null; }
+      else { hist = this.hModel; info.by = "model"; }
+    }
+    if (v === null) v = this.order.keys().next().value;
+    hist.set(v, t);
+    if (hist.size > this.c) hist.delete(hist.keys().next().value);
+    this.order.delete(v);
+    const i = this.pos.get(v); this.pos.delete(v);
+    const tail = this.res.pop();
+    if (tail !== v) { this.res[i] = tail; this.pos.set(tail, i); }
+    info.victim = v;
+    this.decision = info;
+    return v;
+  }
+  regret(p, t) {
+    for (const [hist, modelWrong] of [[this.hModel, true], [this.hLRU, false]]) {
+      if (hist.has(p)) {
+        const r = Math.pow(this.d, t - hist.get(p)); hist.delete(p);
+        let wm = this.wModel, wl = 1 - this.wModel;
+        if (modelWrong) wl *= Math.exp(this.lr * r); else wm *= Math.exp(this.lr * r);
+        this.wModel = wm / (wm + wl);
+        return modelWrong ? "model" : "LRU";
+      }
+    }
+    return null;
+  }
+  access(p, t) {
+    if (this.pos.has(p)) { this.order.delete(p); this.order.set(p, 1); this.touch(p, t); return { hit: true, victim: null }; }
+    const blamed = this.regret(p, t);
+    let v = null;
+    if (this.res.length >= this.c) v = this.evict(t);
+    else this.decision = null;
+    if (this.decision) this.decision.blamed = blamed;
+    this.pos.set(p, this.res.length); this.res.push(p); this.order.set(p, 1); this.touch(p, t);
+    return { hit: false, victim: v };
+  }
+}
+
+const POLICIES = [
+  { key: "FIFO", color: "var(--s1)", make: (c) => new FIFO(c) },
+  { key: "LRU", color: "var(--s2)", make: (c) => new LRU(c) },
+  { key: "LFU", color: "var(--s3)", make: (c) => new LFU(c) },
+  { key: "CLOCK", color: "var(--s4)", make: (c) => new CLOCK(c) },
+  { key: "ARC", color: "var(--s5)", make: (c) => new ARC(c) },
+  { key: "LeCaR", color: "var(--s6)", make: (c, tr, seed) => new LeCaR(c, mulberry32(seed + 11)) },
+  { key: "Learned", color: "var(--s7)", make: (c, tr, seed, k) => new Learned(c, mulberry32(seed + 23), k), ours: true },
+  { key: "OPT", color: "var(--opt)", make: (c, tr) => new OPT(c, tr) },
+];
+
+// ------------------------------------------------------------- simulation
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>"]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch]));
+let S = null, playing = false, selected = "Learned", lastTs = null, carry = 0;
+
+function distinctOf(tr) { return new Set(tr).size; }
+
+function reset() {
+  const wl = $("workload").value, seed = Math.max(1, parseInt($("seed").value, 10) || 7);
+  const trace = TRACES[wl](mulberry32(seed));
+  const distinct = distinctOf(trace);
+  let c = Math.max(1, parseInt($("frames").value, 10) || 3);
+  c = Math.min(c, distinct);
+  $("frames").value = c;
+  $("frames-pct").textContent = `${(100 * c / distinct).toFixed(c / distinct < 0.1 ? 1 : 0)}% of ${distinct} pages`;
+  const k = parseInt($("k").value, 10);
+  S = {
+    trace, t: 0, c, distinct, wl,
+    runs: POLICIES.map((P) => ({
+      P, pol: P.make(c, trace, seed, k), faults: 0, slots: [], where: new Map(), log: [], last: null, classic: [],
+    })),
+  };
+  render(true);
+}
+
+function stepOnce() {
+  if (!S || S.t >= S.trace.length) return false;
+  const t = S.t, p = S.trace[t];
+  for (const run of S.runs) {
+    const r = run.pol.access(p, t);
+    if (!r.hit) {
+      run.faults++;
+      let idx;
+      if (r.victim !== null && r.victim !== undefined) { idx = run.where.get(r.victim); run.where.delete(r.victim); run.slots[idx] = p; }
+      else { idx = run.slots.length; run.slots.push(p); }
+      run.where.set(p, idx);
+      run.last = { t, p, hit: false, victim: r.victim, idx };
+    } else run.last = { t, p, hit: true, victim: null, idx: run.where.get(p) };
+    run.log.push(r.hit ? 1 : 0);
+    if (S.trace.length <= 40) run.classic.push({ slots: run.slots.slice(), hit: r.hit, idx: run.last.idx });
+  }
+  S.t++;
+  return true;
+}
+
+// ------------------------------------------------------------------ render
+function render(full) {
+  const n = S.trace.length;
+  $("clock").textContent = `reference ${S.t.toLocaleString()} of ${n.toLocaleString()}`;
+  renderRace(); renderSelected(); renderTape();
+  if (S.t >= n && playing) setPlaying(false);
+}
+
+function renderRace() {
+  const lru = S.runs.find((r) => r.P.key === "LRU").faults;
+  const max = Math.max(1, ...S.runs.map((r) => r.faults));
+  $("race").innerHTML = S.runs.map((r) => {
+    const vs = r.P.key === "LRU" || S.t === 0 || lru === 0 ? "–" : `${(100 * (r.faults - lru) / lru).toFixed(1)}%`;
+    return `<div class="race-row${r.P.key === selected ? " sel" : ""}${r.P.ours ? " ours" : ""}" role="option" tabindex="0" aria-selected="${r.P.key === selected}" data-key="${r.P.key}">
+      <span class="name"><i class="key" style="background:${r.P.color}"></i>${r.P.key}</span>
+      <span class="track"><span class="fill" style="width:${(100 * r.faults / max).toFixed(1)}%;background:${r.P.color}"></span></span>
+      <span class="v">${r.faults.toLocaleString()}</span>
+      <span class="d">${vs}</span></div>`;
+  }).join("");
+}
+
+function renderSelected() {
+  const run = S.runs.find((r) => r.P.key === selected);
+  $("sel-title").textContent = `${selected}: memory frames`;
+  const rate = S.t ? (100 * run.faults / S.t).toFixed(1) : "0.0";
+  $("sel-sub").textContent = `${run.faults} faults in ${S.t} references (${rate}%)`;
+  const L = run.last;
+  if (L) {
+    $("status").innerHTML = `<span>Page <b class="mono">${L.p}</b></span>` +
+      (L.hit ? `<span class="tag hit">H · hit</span>` : `<span class="tag miss">F · page fault</span>`) +
+      (!L.hit && L.victim !== null && L.victim !== undefined ? `<span>evicted <b class="mono">${L.victim}</b></span>` : "") +
+      (!L.hit && (L.victim === null || L.victim === undefined) ? `<span>loaded into a free frame</span>` : "");
+  } else $("status").innerHTML = `<span>Press Play or Step.</span>`;
+
+  const SHOW = 96;
+  const slots = run.slots.slice(0, SHOW);
+  const cells = [];
+  for (let i = 0; i < Math.min(S.c, SHOW); i++) {
+    if (i >= slots.length) { cells.push(`<div class="frame empty">–<small>${i}</small></div>`); continue; }
+    const cls = L && L.idx === i ? (L.hit ? " hit" : " load") : "";
+    cells.push(`<div class="frame${cls}">${slots[i]}<small>${i}</small></div>`);
+  }
+  $("frames-view").innerHTML = cells.join("");
+  $("frames-more").hidden = S.c <= SHOW;
+  $("frames-more").textContent = `Showing ${SHOW} of ${S.c} frames.`;
+
+  // classic textbook table: frames down, references across
+  const classic = $("classic");
+  if (S.trace.length <= 40) {
+    classic.hidden = false;
+    let h = `<table><thead><tr><th>ref</th>${S.trace.map((p, i) => `<th${i === S.t - 1 ? ' style="color:var(--accent)"' : ""}>${p}</th>`).join("")}</tr></thead><tbody>`;
+    for (let f = 0; f < S.c; f++) {
+      h += `<tr><th>F${f}</th>` + S.trace.map((_, i) => {
+        const col = run.classic[i];
+        if (!col) return "<td></td>";
+        const v = col.slots[f];
+        return `<td class="${!col.hit && col.idx === f ? "new" : ""}">${v === undefined ? "" : v}</td>`;
+      }).join("") + "</tr>";
+    }
+    h += `<tr><th></th>` + S.trace.map((_, i) => { const col = run.classic[i]; return col ? `<td class="${col.hit ? "" : "f"}">${col.hit ? "" : "F"}</td>` : "<td></td>"; }).join("") + "</tr></tbody></table>";
+    classic.innerHTML = h;
+  } else classic.hidden = true;
+
+  // why the learned policy chose its last victim
+  const why = $("why");
+  if (selected !== "Learned") { why.hidden = true; return; }
+  why.hidden = false;
+  const pol = run.pol, d = pol.decision;
+  const wm = pol.wModel;
+  let h = `<div class="kv"><span>Trust in model <span class="meter" aria-hidden="true"><i style="width:${(100 * wm).toFixed(0)}%"></i></span> <b>${(100 * wm).toFixed(0)}%</b></span><span>Trust in LRU <b>${(100 * (1 - wm)).toFixed(0)}%</b></span></div>`;
+  if (!d) {
+    h += `<p>No eviction yet${S.t ? " (memory still had free frames)" : ""}. On each fault with memory full, the policy samples up to ${pol.k} resident pages, scores each with the model, and evicts the highest score.</p>`;
+  } else if (!d.useModel) {
+    h += `<p>Last eviction at reference ${d.t}: the regret guard picked <b>LRU</b> this time and evicted page <b class="mono">${d.victim}</b>, the least recently used.${d.blamed ? ` Just before, a page that ${d.blamed} had evicted came back, so ${d.blamed === "model" ? "LRU" : "the model"} gained trust.` : ""}</p>`;
+  } else {
+    const sample = d.sample.slice().sort((a, b) => b.s - a.s);
+    h += `<p>Last eviction at reference ${d.t}: the model scored ${sample.length} sampled pages. ${d.fallback
+      ? `Even the best score (${sample[0].s.toFixed(2)}) was below ${MODEL.threshold}, so it was unsure and evicted the LRU page <b class="mono">${d.victim}</b> instead.`
+      : `It evicted page <b class="mono">${d.victim}</b>, the one most likely not to be needed within the next ${2 * S.c} references.`}${d.blamed ? ` Just before, a page that ${d.blamed} had evicted came back, so ${d.blamed === "model" ? "LRU" : "the model"} gained trust.` : ""}</p>`;
+    h += `<div class="table-wrap"><table><thead><tr><th>Page</th><th>Age</th><th>Accesses</th><th>Mean gap</th><th>P(not needed soon)</th></tr></thead><tbody>` +
+      sample.slice(0, 10).map((r) => `<tr class="${r.p === d.victim && !d.fallback ? "victim" : ""}"><td class="mono">${r.p}</td><td>${r.age}</td><td>${r.cnt}</td><td>${r.mean === null ? "–" : r.mean.toFixed(0)}</td><td><span class="scorebar" style="width:${(60 * r.s).toFixed(0)}px"></span>${r.s.toFixed(3)}</td></tr>`).join("") +
+      `</tbody></table></div>` + (sample.length > 10 ? `<p style="font-size:12px;color:var(--muted)">Top 10 of ${sample.length} sampled pages.</p>` : "");
+  }
+  why.innerHTML = h;
+}
+
+function renderTape() {
+  const run = S.runs.find((r) => r.P.key === selected);
+  const from = Math.max(0, S.t - 30), to = Math.min(S.trace.length, from + 40);
+  let h = "";
+  for (let i = from; i < to; i++) {
+    const done = i < S.t, mark = done ? (run.log[i] ? '<em class="h">H</em>' : '<em class="f">F</em>') : "<em>&nbsp;</em>";
+    h += `<li class="${i === S.t - 1 ? "now" : ""}"><span>${S.trace[i]}</span>${mark}</li>`;
+  }
+  $("tape").innerHTML = h;
+}
+
+// -------------------------------------------------------------------- loop
+function setPlaying(p) { playing = p; $("play").textContent = p ? "Pause" : "Play"; lastTs = null; carry = 0; }
+function frame(ts) {
+  if (playing && lastTs !== null) {
+    carry += Math.min(250, ts - lastTs) / 1000 * parseFloat($("speed").value);
+    let n = Math.floor(carry);
+    carry -= n;
+    if (n > 0) { while (n-- > 0 && stepOnce()); render(); }
+  }
+  lastTs = ts;
+  requestAnimationFrame(frame);
+}
+
+$("play").addEventListener("click", () => { if (S.t >= S.trace.length) reset(); setPlaying(!playing); });
+$("step").addEventListener("click", () => { setPlaying(false); stepOnce(); render(); });
+$("finish").addEventListener("click", () => {
+  setPlaying(false);
+  const b = $("finish"); b.disabled = true; b.textContent = "Running…";
+  setTimeout(() => { while (stepOnce()); render(); b.disabled = false; b.textContent = "Run to end"; }, 20);
+});
+$("reset").addEventListener("click", () => { setPlaying(false); reset(); });
+$("workload").addEventListener("change", () => {
+  const wl = $("workload").value;
+  if (wl === "textbook") { $("frames").value = 3; $("speed").value = "3"; }
+  else {
+    const d = distinctOf(TRACES[wl](mulberry32(parseInt($("seed").value, 10) || 7)));
+    $("frames").value = Math.max(8, Math.round(0.05 * d)); $("speed").value = "2000";
+  }
+  setPlaying(false); reset();
+});
+for (const id of ["frames", "k", "seed"]) $(id).addEventListener("change", () => { setPlaying(false); reset(); });
+function pick(e) { const row = e.target.closest(".race-row"); if (row) { selected = row.dataset.key; render(); } }
+$("race").addEventListener("click", pick);
+$("race").addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pick(e); } });
+$("rows").textContent = MODEL.rows.toLocaleString();
+
+reset();
+// open on a finished textbook run so the first view already shows results
+while (stepOnce());
+render();
+requestAnimationFrame(frame);
+</script>
