@@ -3,3 +3,5 @@ traces: loop-1500-s1 (120000 refs, 1500 pages), zipf-0.9-s1 (150000 refs, 9764 p
 training data: 474673 OPT-labelled rows from 6 traces in 3.0s
 validation, faults / LRU (lower is better): logreg-H0.5=0.939, logreg-H1.0=0.938, logreg-H2.0=0.935, tree-H0.5=0.968, tree-H1.0=0.951, tree-H2.0=0.953, tree-regression=0.951
 chosen: logreg-H2.0, k=32, threshold=0.500 (validation faults / LRU = 0.932)
+done in 622s
+wrote results/summary.md and figures in figures/

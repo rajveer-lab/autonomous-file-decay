@@ -1,0 +1,56 @@
+{
+  "textbook": {
+    "FIFO": 15,
+    "LRU": 12,
+    "OPT": 9
+  },
+  "model": {
+    "kind": "logreg",
+    "target": "logreg-H2.0",
+    "k": 32,
+    "threshold": 0.5,
+    "params": 9,
+    "bytes": 36,
+    "train_seconds": 0.362,
+    "train_rows": 474673,
+    "weights": {
+      "age": 0.2308512859375677,
+      "count": 0.08614118576060052,
+      "gap1": 0.1478872605910588,
+      "gap2": 0.22419167629105455,
+      "gap3": 0.2519189703719372,
+      "mean_gap": 0.16225389771383122,
+      "age_over_gap": -0.2005505162180408,
+      "has_gap": -1.7726282540109795,
+      "bias": -0.2526316818701606
+    }
+  },
+  "metadata_bytes_per_page": {
+    "FIFO": 8,
+    "LRU": 16,
+    "LFU": 16,
+    "CLOCK": 1,
+    "ARC": 24,
+    "LeCaR": 32,
+    "SIEVE": 17,
+    "S3-FIFO": 9,
+    "SampledLRU-16": 8,
+    "OPT": 8,
+    "Learned": 40,
+    "Learned (no guard)": 40
+  },
+  "fractions": [
+    0.01,
+    0.02,
+    0.05,
+    0.1
+  ],
+  "seconds": 622.5,
+  "log": [
+    "textbook check (3 frames): {'FIFO': 15, 'LRU': 12, 'OPT': 9}",
+    "traces: loop-1500-s1 (120000 refs, 1500 pages), zipf-0.9-s1 (150000 refs, 9764 pages), phase-900-s1 (150000 refs, 4112 pages), scanhot-600-s1 (150000 refs, 41100 pages), mixed-0.5-s1 (150000 refs, 6961 pages), matmul-256 (196608 refs, 516 pages), loop-1800-s2 (120000 refs, 1800 pages), zipf-0.8-s2 (150000 refs, 9936 pages), phase-1100-s2 (150000 refs, 4750 pages), scanhot-800-s2 (150000 refs, 41300 pages), mixed-0.4-s2 (150000 refs, 7100 pages), mergesort-4096 (98304 refs, 512 pages), loop-2000-s3 (120000 refs, 2000 pages), zipf-1.0-s3 (150000 refs, 10732 pages), phase-1300-s3 (150000 refs, 4700 pages), scanhot-1000-s3 (150000 refs, 58500 pages), mixed-0.6-s3 (150000 refs, 6833 pages), matmul-320 (307200 refs, 806 pages), mergesort-8192 (212992 refs, 1024 pages), bfs-15000 (215907 refs, 528 pages)",
+    "training data: 474673 OPT-labelled rows from 6 traces in 3.0s",
+    "validation, faults / LRU (lower is better): logreg-H0.5=0.939, logreg-H1.0=0.938, logreg-H2.0=0.935, tree-H0.5=0.968, tree-H1.0=0.951, tree-H2.0=0.953, tree-regression=0.951",
+    "chosen: logreg-H2.0, k=32, threshold=0.500 (validation faults / LRU = 0.932)"
+  ]
+}
