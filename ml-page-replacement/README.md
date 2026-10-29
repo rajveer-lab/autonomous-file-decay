@@ -16,6 +16,31 @@ contains every module from the block diagram in the Review 1 notes:
 
 Only Python 3.10+, NumPy and Matplotlib are needed.
 
+## PageLab: the app for real workloads
+
+```bash
+python3 -m mlpaging serve        # opens http://127.0.0.1:8765
+```
+
+PageLab works on traces from real programs instead of synthetic ones:
+
+1. **Workloads.** Record a program on this machine, either its memory
+   accesses (Valgrind Lackey) or its file reads and writes (strace). You can
+   also import a trace file: MSR Cambridge / SNIA CSV, Windows Process
+   Monitor CSV, blkparse, Valgrind or strace logs, or a plain address list.
+2. **Train.** Train the learned policy on the first part of your own traces,
+   with OPT labelling done offline.
+3. **Simulate.** Run every policy on the part the model never saw, at several
+   memory sizes, in parallel worker processes.
+4. **Results.** Fault rate by memory size, faults relative to LRU, a full
+   table, and CSV download.
+
+The same steps are available from the terminal:
+`python3 -m mlpaging record -- python3 my_script.py` and
+`python3 -m mlpaging import trace.csv.gz`. Data is kept in `~/.mlpaging`.
+The server listens only on 127.0.0.1, and every API call needs the session
+key embedded in the page.
+
 ## Run it
 
 **Interactive demo:** open `web/index.html` in any browser (no install). It

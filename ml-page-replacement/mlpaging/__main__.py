@@ -1,4 +1,4 @@
-"""Command line: python -m mlpaging {verify,run,report,demo}."""
+"""Command line: python -m mlpaging {serve,import,record,verify,run,report,demo,msr}."""
 
 import argparse
 import sys
@@ -29,7 +29,40 @@ def main(argv=None):
     m.add_argument("path")
     m.add_argument("--fraction", type=float, default=0.05)
     m.add_argument("--limit", type=int, default=500_000)
+    sv = sub.add_parser("serve", help="start the PageLab web application")
+    sv.add_argument("--port", type=int, default=8765)
+    sv.add_argument("--data", default="~/.mlpaging", help="where workloads, models and runs are kept")
+    sv.add_argument("--no-browser", action="store_true")
+    im = sub.add_parser("import", help="add a trace file to PageLab's workloads")
+    im.add_argument("path")
+    im.add_argument("--format", default="auto")
+    im.add_argument("--name")
+    im.add_argument("--data", default="~/.mlpaging")
+    rc = sub.add_parser("record", help="record a program's page references into PageLab")
+    rc.add_argument("--tool", choices=["valgrind", "strace"], default="valgrind")
+    rc.add_argument("--cap", type=int, default=2_000_000)
+    rc.add_argument("--data", default="~/.mlpaging")
+    rc.add_argument("command", nargs=argparse.REMAINDER)
     args = ap.parse_args(argv)
+
+    if args.cmd == "serve":
+        from .app import serve
+        serve(args.port, args.data, not args.no_browser)
+        return 0
+    if args.cmd in ("import", "record"):
+        from . import realtrace as RT
+        from .app import Store
+        store = Store(args.data)
+        if args.cmd == "import":
+            built, fmt = RT.load(args.path, fmt=args.format)
+            doc = store.save_trace(args.name or args.path.rsplit("/", 1)[-1], built,
+                                   {"kind": "file", "format": fmt, "file": args.path})
+        else:
+            cmd = [c for c in args.command if c != "--"]
+            built, info = RT.record(cmd, tool=args.tool, cap=args.cap)
+            doc = store.save_trace(f"{cmd[0]} ({args.tool})", built, {"kind": "recorded", **info})
+        print(f"added {doc['name']}: {doc['refs']:,} references, {doc['distinct']:,} pages (id {doc['id']})")
+        return 0
 
     if args.cmd == "verify":
         print(experiment.verify_textbook(), "(expected FIFO 15, LRU 12, OPT 9)")

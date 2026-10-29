@@ -25,6 +25,7 @@ class Policy:
         self.c = capacity
         self.decision_ns = 0
         self.decisions = 0
+        self.last_victim = None     # page evicted by the latest access, if any
 
     def access(self, page: int, t: int) -> bool:  # pragma: no cover
         raise NotImplementedError
@@ -34,6 +35,7 @@ class Policy:
         v = self._evict(t)
         self.decision_ns += perf_counter_ns() - t0
         self.decisions += 1
+        self.last_victim = v
         return v
 
 
@@ -209,7 +211,7 @@ class ARC(Policy):
                 self._timed_evict(t)
             else:
                 t0 = perf_counter_ns()
-                t1.popitem(last=False)
+                self.last_victim = t1.popitem(last=False)[0]
                 self.decision_ns += perf_counter_ns() - t0
                 self.decisions += 1
         else:

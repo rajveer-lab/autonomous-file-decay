@@ -131,6 +131,17 @@ class LogReg:
         self.b = float(self.b)
         return self
 
+    def to_dict(self):
+        return {"kind": "logreg", "cols": list(self.cols), "weights": list(map(float, self.w)),
+                "bias": float(self.b)}
+
+    @classmethod
+    def from_dict(cls, d):
+        m = cls()
+        m.cols = d.get("cols", list(range(len(d["weights"]))))
+        m.w, m.b = list(map(float, d["weights"])), float(d["bias"])
+        return m
+
 
 class Tree:
     """A shallow CART tree with variance-reduction splits.
@@ -197,6 +208,16 @@ class Tree:
 
     def compile(self):
         return self
+
+    def to_dict(self):
+        return {"kind": "tree", "cols": list(self.cols), "nodes": [list(n) for n in self.nodes]}
+
+    @classmethod
+    def from_dict(cls, d):
+        m = cls()
+        m.cols = d["cols"]
+        m.nodes = [tuple(n) for n in d["nodes"]]
+        return m
 
     def predict(self, X):
         X = X[:, self.cols]
@@ -360,3 +381,7 @@ class LearnedPolicy(Policy):
 def model_bytes(model) -> int:
     return 4 * model.n_params      # float32 parameters
 
+
+
+def model_from_dict(d):
+    return (Tree if d["kind"] == "tree" else LogReg).from_dict(d)

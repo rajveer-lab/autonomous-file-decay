@@ -1,0 +1,33 @@
+{
+ "id": "pretrained",
+ "name": "Pretrained (synthetic workloads)",
+ "kind": "logreg",
+ "features": [
+  "age",
+  "count",
+  "gap1",
+  "gap2",
+  "gap3",
+  "mean_gap",
+  "age_over_gap",
+  "has_gap"
+ ],
+ "weights": [
+  0.2308512859375677,
+  0.08614118576060052,
+  0.1478872605910588,
+  0.22419167629105455,
+  0.2519189703719372,
+  0.16225389771383122,
+  -0.2005505162180408,
+  -1.7726282540109795
+ ],
+ "bias": -0.2526316818701606,
+ "horizon": 2.0,
+ "k": 32,
+ "threshold": 0.5,
+ "trained_on": [
+  "synthetic training split from mlpaging/traces.py"
+ ],
+ "rows": 474673
+}

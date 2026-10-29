@@ -1,0 +1,584 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="token" content="__TOKEN__">
+<title>PageLab</title>
+<style>
+/* PageLab: an application console. Top bar with job activity; tabs for the
+   four steps (workloads, train, simulate, results). Neutral greys with a
+   green-teal accent; policy colours only on charts. System fonts so it
+   works offline. */
+:root {
+  --bg: #eef0ef; --surface: #fbfcfb; --surface-2: #f1f3f2; --ink: #121614; --ink-2: #48514d;
+  --muted: #6e7873; --line: #d3d9d6; --line-2: #e5e9e7; --accent: #1f6f5c; --accent-ink: #fff;
+  --accent-soft: #dcefe8; --good: #0a7d0a; --bad: #c23434; --warn: #b87700;
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100; --s5: #e87ba4; --s6: #008300;
+  --s7: #6250d6; --s8: #e34948; --opt: #898781; --grid: #e1e0d9;
+  --mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #0e1110; --surface: #161a18; --surface-2: #1d2220; --ink: #e8ece9; --ink-2: #b1bab4;
+    --muted: #86908a; --line: #2d3430; --line-2: #232926; --accent: #6cc4a8; --accent-ink: #0b1310;
+    --accent-soft: #1b3129; --good: #3cc13c; --bad: #ef6b6b; --warn: #e3a52a;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181; --s6: #008300;
+    --s7: #9085e9; --s8: #e66767; --grid: #2c2c2a; color-scheme: dark; }
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 var(--sans); }
+.top { position: sticky; top: 0; z-index: 5; background: var(--surface); border-bottom: 1px solid var(--line); }
+.top-in { max-width: 1280px; margin: 0 auto; padding: 10px 20px; display: flex; gap: 18px; align-items: center; flex-wrap: wrap; }
+.brand { font-weight: 700; font-size: 19px; letter-spacing: -0.01em; }
+.brand small { font-weight: 500; color: var(--muted); font-size: 13px; margin-left: 8px; }
+nav.tabs { display: flex; gap: 4px; flex-wrap: wrap; }
+nav.tabs button { font: 600 14px var(--sans); border: 0; background: none; color: var(--ink-2); padding: 8px 12px; border-radius: 6px; cursor: pointer; }
+nav.tabs button[aria-selected="true"] { background: var(--accent-soft); color: var(--ink); }
+nav.tabs b { font-family: var(--mono); font-size: 12px; color: var(--muted); margin-right: 6px; }
+.activity { margin-left: auto; font-size: 13px; color: var(--muted); display: flex; gap: 8px; align-items: center; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--line); }
+.dot.on { background: var(--accent); animation: pulse 1s infinite alternate; }
+@keyframes pulse { to { opacity: 0.35; } }
+@media (prefers-reduced-motion: reduce) { .dot.on { animation: none; } }
+main { max-width: 1280px; margin: 0 auto; padding: 20px; display: grid; gap: 16px; }
+h1, h2, h3 { margin: 0; text-wrap: balance; }
+h2 { font-size: 20px; }
+h3 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.07em; color: var(--ink-2); }
+p { margin: 0; }
+.muted { color: var(--muted); }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 16px; display: grid; gap: 12px; min-width: 0; }
+.grid2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+@media (max-width: 900px) { .grid2 { grid-template-columns: minmax(0, 1fr); } }
+.field { display: grid; gap: 4px; font-size: 13px; color: var(--ink-2); min-width: 0; }
+.row { display: flex; gap: 10px; flex-wrap: wrap; align-items: end; }
+input[type=text], input[type=number], select {
+  font: 14px var(--sans); color: var(--ink); background: var(--surface); border: 1px solid var(--line);
+  border-radius: 6px; padding: 8px 9px; max-width: 100%; min-width: 0;
+}
+input[type=text] { width: 100%; }
+input.mono, .mono { font-family: var(--mono); }
+input[type=file] { font: 13px var(--sans); max-width: 100%; }
+input[type=checkbox], input[type=radio] { accent-color: var(--accent); }
+button.btn { font: 600 14px var(--sans); padding: 9px 14px; border-radius: 6px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); cursor: pointer; }
+button.btn:hover { border-color: var(--accent); }
+button.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+button.btn.small { padding: 5px 9px; font-size: 12px; }
+button.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.note { font-size: 13px; color: var(--ink-2); background: var(--surface-2); border-radius: 6px; padding: 9px 11px; }
+.note.warn { border-left: 3px solid var(--warn); }
+.empty { color: var(--muted); font-size: 14px; padding: 18px; text-align: center; border: 1px dashed var(--line); border-radius: 8px; }
+.table-wrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th, td { padding: 7px 9px; border-bottom: 1px solid var(--line-2); text-align: left; white-space: nowrap; }
+th { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); font-weight: 600; }
+td.r, th.r { text-align: right; font-variant-numeric: tabular-nums; }
+tr.pick { cursor: pointer; }
+tr.pick:hover td { background: var(--surface-2); }
+tr.sel td { background: var(--accent-soft); }
+.chip { display: inline-block; font: 600 11px var(--mono); padding: 2px 6px; border-radius: 4px; background: var(--surface-2); border: 1px solid var(--line); color: var(--ink-2); }
+.good { color: var(--good); } .bad { color: var(--bad); }
+.jobs { display: grid; gap: 8px; }
+.job { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; font-size: 13px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; }
+.job .bar { grid-column: 1 / -1; height: 6px; background: var(--surface-2); border-radius: 999px; overflow: hidden; }
+.job .bar i { display: block; height: 100%; background: var(--accent); }
+.job.error { border-color: var(--bad); }
+.job.error .bar i { background: var(--bad); }
+.job .msg { grid-column: 1 / -1; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+.checks { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 14px; }
+.checks label { display: inline-flex; gap: 6px; align-items: center; }
+canvas.preview { width: 100%; height: 150px; display: block; background: var(--surface-2); border-radius: 6px; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13px; color: var(--ink-2); }
+.legend span { display: inline-flex; gap: 6px; align-items: center; }
+.legend i { width: 14px; height: 3px; border-radius: 2px; display: inline-block; }
+svg.chart { width: 100%; height: auto; display: block; overflow: visible; }
+.chart-box { position: relative; }
+.tip { position: absolute; pointer-events: none; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; font-size: 12px; box-shadow: 0 4px 14px rgba(0,0,0,.12); white-space: nowrap; }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
+.kpi { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; display: grid; gap: 2px; }
+.kpi .l { font-size: 12px; color: var(--ink-2); }
+.kpi .v { font-size: 24px; font-weight: 650; }
+.kpi .n { font-size: 12px; color: var(--muted); }
+.toast { position: fixed; right: 16px; bottom: 16px; background: var(--ink); color: var(--bg); padding: 10px 14px; border-radius: 8px; font-size: 14px; max-width: 420px; z-index: 20; }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="top-in">
+    <div class="brand">PageLab<small>learned page replacement on your own workloads</small></div>
+    <nav class="tabs" role="tablist">
+      <button role="tab" data-tab="workloads" aria-selected="true"><b>1</b>Workloads</button>
+      <button role="tab" data-tab="train" aria-selected="false"><b>2</b>Train</button>
+      <button role="tab" data-tab="simulate" aria-selected="false"><b>3</b>Simulate</button>
+      <button role="tab" data-tab="results" aria-selected="false"><b>4</b>Results</button>
+    </nav>
+    <div class="activity"><span class="dot" id="busy-dot"></span><span id="busy-text">idle</span></div>
+  </div>
+</header>
+
+<main>
+  <!-- 1. WORKLOADS -->
+  <section data-view="workloads" class="grid2">
+    <div class="panel">
+      <h2>Your workloads</h2>
+      <p class="muted" style="font-size:14px">Page reference traces captured from real programs or imported from trace files. Select one to see its access pattern.</p>
+      <div id="trace-list"></div>
+      <div id="trace-detail" hidden>
+        <h3 id="trace-detail-title"></h3>
+        <canvas class="preview" id="preview" width="1200" height="300" aria-label="Page number against time"></canvas>
+        <p class="muted" style="font-size:12px">Each dot is a reference: time runs left to right, page number goes up. Diagonal lines are scans or loops; horizontal bands are hot pages.</p>
+      </div>
+    </div>
+    <div style="display:grid;gap:16px;min-width:0">
+      <div class="panel">
+        <h2>Record a program on this machine</h2>
+        <p class="muted" style="font-size:14px">Runs the command and captures the pages it touches while it runs.</p>
+        <label class="field" for="rec-cmd">Command
+          <input type="text" id="rec-cmd" class="mono" placeholder="e.g. python3 my_script.py   or   sort big.txt" autocomplete="off">
+        </label>
+        <div class="row">
+          <label class="field" for="rec-tool">Capture
+            <select id="rec-tool">
+              <option value="valgrind">Memory accesses (Valgrind)</option>
+              <option value="strace">File reads and writes (strace)</option>
+            </select>
+          </label>
+          <label class="field" for="rec-cap">Stop after (references)
+            <input type="number" id="rec-cap" value="2000000" min="10000" step="100000">
+          </label>
+          <label class="field" for="rec-name">Name
+            <input type="text" id="rec-name" placeholder="optional" style="width:160px">
+          </label>
+        </div>
+        <label style="font-size:13px;color:var(--ink-2);display:flex;gap:6px;align-items:center"><input type="checkbox" id="rec-instr"> Include instruction fetches (Valgrind)</label>
+        <div class="row"><button class="btn primary" id="rec-go" type="button">Record</button></div>
+        <p class="note warn" id="tool-note" hidden></p>
+        <p class="note">The command runs with your user's permissions, exactly as if you typed it in a terminal. Only this page can start it: the server listens on 127.0.0.1 and checks a per-session key.</p>
+      </div>
+      <div class="panel">
+        <h2>Import a trace file</h2>
+        <p class="muted" style="font-size:14px">MSR Cambridge / SNIA block traces (.csv, .csv.gz), Windows Process Monitor CSV exports, Linux blkparse output, Valgrind Lackey logs, strace logs, or a plain list of addresses.</p>
+        <input type="file" id="imp-file" aria-label="Trace file">
+        <div class="row">
+          <label class="field" for="imp-format">Format
+            <select id="imp-format">
+              <option value="auto">Detect automatically</option>
+              <option value="msr">MSR Cambridge / SNIA CSV</option>
+              <option value="procmon">Process Monitor CSV (Windows)</option>
+              <option value="blkparse">blkparse text (Linux)</option>
+              <option value="lackey">Valgrind Lackey</option>
+              <option value="strace">strace</option>
+              <option value="plain">Plain list</option>
+            </select>
+          </label>
+          <label class="field" for="imp-unit">Plain list values are
+            <select id="imp-unit"><option value="address">byte addresses</option><option value="page">page numbers</option></select>
+          </label>
+          <label class="field" for="imp-cap">Keep at most (references)
+            <input type="number" id="imp-cap" value="2000000" min="10000" step="100000">
+          </label>
+        </div>
+        <div class="row"><button class="btn primary" id="imp-go" type="button">Import</button></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2. TRAIN -->
+  <section data-view="train" class="grid2" hidden>
+    <div class="panel">
+      <h2>Train the learned policy on your workloads</h2>
+      <p class="muted" style="font-size:14px">The first part of each selected trace is replayed under Belady's OPT, which knows the future. At each OPT eviction, sampled pages are labelled with whether they are needed again soon, and a small model learns to predict that from the page's past only.</p>
+      <div class="field"><span>Traces to learn from</span><div id="train-traces" class="checks"></div></div>
+      <div class="row">
+        <label class="field" for="train-frac">Use the first
+          <select id="train-frac"><option value="0.3">30%</option><option value="0.5" selected>50%</option><option value="0.7">70%</option><option value="1">100%</option></select>
+        </label>
+        <label class="field" for="train-kind">Model
+          <select id="train-kind"><option value="logreg">Logistic regression (9 numbers)</option><option value="tree">Decision tree (depth 4)</option></select>
+        </label>
+        <label class="field" for="train-h">"Needed soon" means within
+          <select id="train-h"><option value="1">1 × memory size</option><option value="2" selected>2 × memory size</option><option value="4">4 × memory size</option></select>
+        </label>
+        <label class="field" for="train-name">Name <input type="text" id="train-name" placeholder="optional" style="width:170px"></label>
+      </div>
+      <div class="row"><button class="btn primary" id="train-go" type="button">Train</button></div>
+      <p class="note">Then simulate the rest of the trace (the part the model never saw) to check it generalises. The Simulate tab does this by default for a model trained on that trace.</p>
+    </div>
+    <div class="panel">
+      <h2>Models</h2>
+      <div id="model-list"></div>
+    </div>
+  </section>
+
+  <!-- 3. SIMULATE -->
+  <section data-view="simulate" class="grid2" hidden>
+    <div class="panel">
+      <h2>Run the policies</h2>
+      <label class="field" for="sim-trace">Workload <select id="sim-trace"></select></label>
+      <div class="row">
+        <label class="field" for="sim-range">Part of the trace
+          <select id="sim-range">
+            <option value="0">All of it</option>
+            <option value="0.3">Last 70%</option>
+            <option value="0.5" selected>Last 50% (unseen by a model trained on the first 50%)</option>
+            <option value="0.7">Last 30%</option>
+          </select>
+        </label>
+        <label class="field" for="sim-model">Model for "Learned" <select id="sim-model"></select></label>
+      </div>
+      <div class="field"><span>Memory sizes (frames), as a share of the pages this part touches</span>
+        <div class="checks" id="sim-sizes">
+          <label><input type="checkbox" value="0.01" checked> 1%</label>
+          <label><input type="checkbox" value="0.02" checked> 2%</label>
+          <label><input type="checkbox" value="0.05" checked> 5%</label>
+          <label><input type="checkbox" value="0.1" checked> 10%</label>
+          <label><input type="checkbox" value="0.2"> 20%</label>
+        </div>
+        <label class="field" for="sim-frames" style="margin-top:4px">or exact frame counts, comma-separated
+          <input type="text" id="sim-frames" class="mono" placeholder="e.g. 64, 256, 1024">
+        </label>
+      </div>
+      <div class="field"><span>Policies</span><div class="checks" id="sim-policies"></div></div>
+      <div class="row">
+        <label class="field" for="sim-k">Learned: pages sampled per fault
+          <select id="sim-k"><option value="8">8</option><option value="16">16</option><option value="32" selected>32</option></select>
+        </label>
+      </div>
+      <div class="row"><button class="btn primary" id="sim-go" type="button">Run simulation</button></div>
+      <p class="muted" id="sim-est" style="font-size:13px"></p>
+    </div>
+    <div class="panel">
+      <h2>Activity</h2>
+      <div class="jobs" id="job-list"></div>
+    </div>
+  </section>
+
+  <!-- 4. RESULTS -->
+  <section data-view="results" hidden style="display:grid;gap:16px">
+    <div class="panel">
+      <div class="row" style="justify-content:space-between;align-items:center">
+        <h2 id="res-title">Results</h2>
+        <div class="row">
+          <label class="field" for="res-run" style="min-width:260px">Run <select id="res-run"></select></label>
+          <button class="btn" id="res-csv" type="button">Download CSV</button>
+          <button class="btn" id="res-del" type="button">Delete run</button>
+        </div>
+      </div>
+      <p class="muted" id="res-sub" style="font-size:14px"></p>
+      <div class="kpis" id="res-kpis"></div>
+    </div>
+    <div class="grid2">
+      <div class="panel">
+        <h3>Fault rate by memory size</h3>
+        <div class="legend" id="res-legend"></div>
+        <div class="chart-box" id="res-chart"></div>
+      </div>
+      <div class="panel">
+        <h3>Faults compared with LRU</h3>
+        <div class="row"><label class="field" for="res-size">Memory size <select id="res-size"></select></label></div>
+        <div class="chart-box" id="res-bars"></div>
+      </div>
+    </div>
+    <div class="panel">
+      <h3>Every simulation</h3>
+      <div class="table-wrap"><table id="res-table"></table></div>
+    </div>
+  </section>
+</main>
+<div class="toast" id="toast" hidden role="status"></div>
+
+<script>
+"use strict";
+const TOKEN = document.querySelector('meta[name="token"]').content;
+const COLORS = { FIFO: "var(--s1)", LRU: "var(--s2)", LFU: "var(--s3)", CLOCK: "var(--s4)", ARC: "var(--s5)",
+  LeCaR: "var(--s6)", SIEVE: "var(--s8)", "S3-FIFO": "var(--ink-2)", Learned: "var(--s7)", OPT: "var(--opt)" };
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const fmtN = (n) => Number(n).toLocaleString();
+const ago = (t) => { const s = Date.now() / 1000 - t; return s < 60 ? "just now" : s < 3600 ? `${Math.round(s / 60)} min ago` : s < 86400 ? `${Math.round(s / 3600)} h ago` : new Date(t * 1000).toLocaleDateString(); };
+let state = { traces: [], models: [], runs: [], jobs: [], tools: {}, policies: [] };
+let selectedTrace = null, currentRun = null, seenJobs = new Set();
+
+async function api(path, opts = {}) {
+  const res = await fetch(path, { ...opts, headers: { "X-Token": TOKEN, ...(opts.body && !(opts.body instanceof Blob) && !(opts.body instanceof File) ? { "Content-Type": "application/json" } : {}), ...(opts.headers || {}) } });
+  const ct = res.headers.get("Content-Type") || "";
+  const data = ct.includes("json") ? await res.json() : await res.text();
+  if (!res.ok) throw new Error((data && data.error) || res.statusText);
+  return data;
+}
+function toast(msg) { const t = $("toast"); t.textContent = msg; t.hidden = false; clearTimeout(toast.h); toast.h = setTimeout(() => (t.hidden = true), 4500); }
+
+// ---------------------------------------------------------------- tabs
+function showTab(name) {
+  document.querySelectorAll("nav.tabs button").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.tab === name)));
+  document.querySelectorAll("[data-view]").forEach((v) => (v.hidden = v.dataset.view !== name));
+  if (name === "results") renderResults();
+}
+document.querySelector("nav.tabs").addEventListener("click", (e) => { const b = e.target.closest("button[data-tab]"); if (b) showTab(b.dataset.tab); });
+
+// ---------------------------------------------------------------- state
+async function refresh() {
+  try { state = await api("/api/state"); } catch (e) { $("busy-text").textContent = "server not reachable"; return; }
+  renderTraces(); renderTrain(); renderSimForm(); renderJobs(); renderRunPicker();
+  const running = state.jobs.filter((j) => j.status === "running");
+  $("busy-dot").classList.toggle("on", running.length > 0);
+  $("busy-text").textContent = running.length ? `${running[0].title}: ${Math.round(100 * running[0].progress)}%` : "idle";
+  for (const j of state.jobs) {
+    if (j.status !== "running" && !seenJobs.has(j.id)) {
+      seenJobs.add(j.id);
+      if (refresh.first) continue;
+      if (j.status === "error") toast(`${j.title} failed: ${j.error}`);
+      else if (j.kind === "simulate") { toast("Simulation finished"); currentRun = j.result.run; showTab("results"); }
+      else if (j.kind === "train") toast("Model trained. Pick it in Simulate.");
+      else { toast("Workload added"); selectedTrace = j.result.trace; renderTraces(); }
+    }
+  }
+  refresh.first = false;
+}
+refresh.first = true;
+
+// ------------------------------------------------------------ workloads
+function renderTraces() {
+  const list = $("trace-list");
+  if (!state.traces.length) {
+    list.innerHTML = `<div class="empty">No workloads yet. Record a program or import a trace file to get started.</div>`;
+    $("trace-detail").hidden = true; return;
+  }
+  list.innerHTML = `<div class="table-wrap"><table><thead><tr><th>Name</th><th>Source</th><th class="r">References</th><th class="r">Pages</th><th>Added</th><th></th></tr></thead><tbody>` +
+    state.traces.map((t) => `<tr class="pick${t.id === selectedTrace ? " sel" : ""}" data-id="${t.id}"><td>${esc(t.name)}${t.capped ? ' <span class="chip">capped</span>' : ""}</td>
+      <td>${esc(t.source.kind === "recorded" ? `recorded · ${t.source.tool}` : `file · ${t.source.format}`)}</td>
+      <td class="r">${fmtN(t.refs)}</td><td class="r">${fmtN(t.distinct)}</td><td>${ago(t.created)}</td>
+      <td><button class="btn small" data-del="${t.id}" type="button" aria-label="Delete ${esc(t.name)}">Delete</button></td></tr>`).join("") + `</tbody></table></div>`;
+  if (selectedTrace) showPreview(selectedTrace);
+}
+$("trace-list").addEventListener("click", async (e) => {
+  const del = e.target.closest("[data-del]");
+  if (del) { await api(`/api/traces/${del.dataset.del}`, { method: "DELETE" }); if (selectedTrace === del.dataset.del) selectedTrace = null; refresh(); return; }
+  const tr = e.target.closest("tr[data-id]");
+  if (tr) { selectedTrace = tr.dataset.id; renderTraces(); }
+});
+let previewFor = null;
+async function showPreview(id) {
+  const t = state.traces.find((x) => x.id === id);
+  if (!t) return;
+  $("trace-detail").hidden = false;
+  const src = t.source.kind === "recorded" ? `Recorded from \`${t.source.command}\`` : `Imported from ${t.source.file} (${t.source.format})`;
+  $("trace-detail-title").textContent = `${t.name}: access pattern`;
+  if (previewFor === id) return;
+  previewFor = id;
+  const { sample } = await api(`/api/traces/${id}/preview`);
+  const cv = $("preview"), ctx = cv.getContext("2d"), W = cv.width, H = cv.height;
+  ctx.clearRect(0, 0, W, H);
+  const max = Math.max(1, ...sample);
+  ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue("--s7").trim() || "#6250d6";
+  sample.forEach((p, i) => ctx.fillRect((i / sample.length) * W, H - 4 - (p / max) * (H - 8), 3, 3));
+  cv.title = src;
+}
+
+$("rec-go").addEventListener("click", async () => {
+  const command = $("rec-cmd").value.trim();
+  if (!command) { toast("Type the command to run"); return; }
+  try {
+    await api("/api/traces/record", { method: "POST", body: JSON.stringify({ command, tool: $("rec-tool").value,
+      cap: +$("rec-cap").value, instructions: $("rec-instr").checked, name: $("rec-name").value.trim() }) });
+    toast("Recording started"); refresh();
+  } catch (e) { toast(e.message); }
+});
+$("imp-go").addEventListener("click", async () => {
+  const f = $("imp-file").files[0];
+  if (!f) { toast("Choose a file first"); return; }
+  const q = new URLSearchParams({ name: f.name, format: $("imp-format").value, unit: $("imp-unit").value, cap: $("imp-cap").value });
+  try {
+    $("imp-go").disabled = true; $("imp-go").textContent = "Uploading…";
+    await api(`/api/traces/upload?${q}`, { method: "POST", body: f, headers: { "Content-Type": "application/octet-stream" } });
+    toast("Import started"); refresh();
+  } catch (e) { toast(e.message); }
+  finally { $("imp-go").disabled = false; $("imp-go").textContent = "Import"; }
+});
+
+// ---------------------------------------------------------------- train
+function renderTrain() {
+  const box = $("train-traces");
+  const checked = new Set([...box.querySelectorAll("input:checked")].map((i) => i.value));
+  box.innerHTML = state.traces.length ? state.traces.map((t) => `<label><input type="checkbox" value="${t.id}"${checked.has(t.id) ? " checked" : ""}> ${esc(t.name)}</label>`).join("")
+    : `<span class="muted">Add a workload first.</span>`;
+  $("model-list").innerHTML = `<div class="table-wrap"><table><thead><tr><th>Model</th><th>Trained on</th><th class="r">Rows</th><th></th></tr></thead><tbody>` +
+    state.models.map((m) => `<tr><td>${esc(m.name)}<br><span class="muted" style="font-size:12px">${m.kind === "tree" ? "decision tree" : "logistic regression"}, horizon ${m.horizon} × memory</span></td>
+      <td style="white-space:normal">${esc((m.trained_on || []).join(", "))}</td><td class="r">${fmtN(m.rows || 0)}</td>
+      <td>${m.id === "pretrained" ? "" : `<button class="btn small" data-delmodel="${m.id}" type="button">Delete</button>`}</td></tr>`).join("") + `</tbody></table></div>`;
+}
+$("model-list").addEventListener("click", async (e) => { const b = e.target.closest("[data-delmodel]"); if (b) { await api(`/api/models/${b.dataset.delmodel}`, { method: "DELETE" }); refresh(); } });
+$("train-go").addEventListener("click", async () => {
+  const traces = [...$("train-traces").querySelectorAll("input:checked")].map((i) => i.value);
+  if (!traces.length) { toast("Tick at least one workload"); return; }
+  try {
+    await api("/api/train", { method: "POST", body: JSON.stringify({ traces, train_fraction: +$("train-frac").value,
+      kind: $("train-kind").value, horizon: +$("train-h").value, name: $("train-name").value.trim() }) });
+    toast("Training started"); refresh();
+  } catch (e) { toast(e.message); }
+});
+
+// ------------------------------------------------------------- simulate
+function renderSimForm() {
+  const keep = (sel, opts) => { const v = sel.value; sel.innerHTML = opts; if ([...sel.options].some((o) => o.value === v)) sel.value = v; };
+  keep($("sim-trace"), state.traces.map((t) => `<option value="${t.id}">${esc(t.name)} (${fmtN(t.refs)} refs)</option>`).join("") || `<option value="">No workloads yet</option>`);
+  keep($("sim-model"), state.models.map((m) => `<option value="${m.id}">${esc(m.name)}</option>`).join(""));
+  const pol = $("sim-policies");
+  if (!pol.children.length && state.policies.length) {
+    pol.innerHTML = state.policies.map((p) => `<label><input type="checkbox" value="${p}"${["SIEVE", "S3-FIFO"].includes(p) ? "" : " checked"}> ${p}</label>`).join("");
+  }
+  const t = state.traces.find((x) => x.id === $("sim-trace").value);
+  $("sim-est").textContent = t ? `${t.name}: ${fmtN(t.distinct)} distinct pages. Larger traces and the learned policy take longer; progress shows at the top.` : "";
+}
+$("sim-trace").addEventListener("change", () => {
+  const tid = $("sim-trace").value;
+  const m = state.models.find((x) => (x.traces || []).includes(tid));
+  if (m) $("sim-model").value = m.id;
+  renderSimForm();
+});
+$("sim-go").addEventListener("click", async () => {
+  const trace = $("sim-trace").value;
+  if (!trace) { toast("Add a workload first"); return; }
+  const t = state.traces.find((x) => x.id === trace), start = +$("sim-range").value;
+  const exact = $("sim-frames").value.split(/[ ,]+/).map(Number).filter((x) => x > 0);
+  const approxDistinct = Math.max(1, Math.round(t.distinct * (1 - start * 0.5)));
+  const frames = exact.length ? exact : [...$("sim-sizes").querySelectorAll("input:checked")].map((i) => Math.max(2, Math.round(+i.value * approxDistinct)));
+  const policies = [...$("sim-policies").querySelectorAll("input:checked")].map((i) => i.value);
+  if (!frames.length || !policies.length) { toast("Pick at least one memory size and one policy"); return; }
+  try {
+    await api("/api/simulate", { method: "POST", body: JSON.stringify({ trace, start, frames, policies, model: $("sim-model").value, k: +$("sim-k").value }) });
+    toast("Simulation started"); refresh();
+  } catch (e) { toast(e.message); }
+});
+function renderJobs() {
+  const jobs = state.jobs;
+  $("job-list").innerHTML = jobs.length ? jobs.map((j) => `<div class="job ${j.status}"><b>${esc(j.title)}</b><span>${j.status === "running" ? Math.round(100 * j.progress) + "%" : j.status}</span>
+    <div class="bar"><i style="width:${Math.round(100 * (j.status === "done" ? 1 : j.progress))}%"></i></div><div class="msg">${esc(j.error || j.message)}</div></div>`).join("")
+    : `<div class="empty">Nothing running. Jobs you start appear here with their progress.</div>`;
+}
+
+// -------------------------------------------------------------- results
+function renderRunPicker() {
+  const sel = $("res-run"), v = currentRun || sel.value;
+  sel.innerHTML = state.runs.map((r) => `<option value="${r.id}">${esc(r.trace_name)} · ${ago(r.created)}</option>`).join("") || `<option value="">No runs yet</option>`;
+  if (v && state.runs.some((r) => r.id === v)) sel.value = v;
+}
+$("res-run").addEventListener("change", () => { currentRun = $("res-run").value; renderResults(); });
+$("res-size").addEventListener("change", () => renderBars());
+$("res-csv").addEventListener("click", async () => {
+  if (!currentRunDoc) return;
+  const csv = await api(`/api/runs/${currentRunDoc.id}.csv`);
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+  a.download = `pagelab-${currentRunDoc.trace_name.replace(/[^\w.-]+/g, "_")}.csv`; a.click();
+});
+$("res-del").addEventListener("click", async () => {
+  if (!currentRunDoc) return;
+  await api(`/api/runs/${currentRunDoc.id}`, { method: "DELETE" }); currentRun = null; await refresh(); renderResults();
+});
+let currentRunDoc = null;
+async function renderResults() {
+  const id = currentRun || $("res-run").value;
+  if (!id) { $("res-title").textContent = "Results"; $("res-sub").textContent = "Run a simulation to see results here."; $("res-kpis").innerHTML = ""; $("res-chart").innerHTML = ""; $("res-bars").innerHTML = ""; $("res-table").innerHTML = ""; return; }
+  currentRun = id; $("res-run").value = id;
+  const run = currentRunDoc = await api(`/api/runs/${id}`);
+  $("res-title").textContent = run.trace_name;
+  $("res-sub").textContent = `References ${fmtN(run.start + 1)}–${fmtN(run.end)} (${fmtN(run.end - run.start)}), ${fmtN(run.distinct)} distinct pages. Learned policy: ${run.model_name}, ${run.k} pages sampled per fault.`;
+  const sizes = run.frames, big = sizes[sizes.length - 1];
+  $("res-size").innerHTML = sizes.map((f) => `<option value="${f}">${fmtN(f)} frames (${(100 * f / run.distinct).toFixed(1)}%)</option>`).join("");
+  $("res-size").value = String(sizes[Math.min(sizes.length - 1, Math.floor(sizes.length / 2))]);
+  // KPIs: learned vs LRU, best online policy, OPT bound
+  const rows = run.rows, online = rows.filter((r) => r.policy !== "OPT");
+  const mean = (arr) => arr.reduce((a, b) => a + b, 0) / Math.max(arr.length, 1);
+  const byPol = {}; rows.forEach((r) => (byPol[r.policy] ||= []).push(r));
+  const kp = [];
+  if (byPol.Learned) {
+    const v = mean(byPol.Learned.map((r) => r.vs_lru_pct));
+    kp.push({ l: "Learned vs LRU (avg over sizes)", v: `${v <= 0 ? "" : "+"}${v.toFixed(1)}%`, n: v <= 0 ? "fewer page faults" : "more page faults", cls: v <= 0 ? "good" : "bad" });
+    const worst = Math.max(...byPol.Learned.map((r) => r.vs_lru_pct));
+    kp.push({ l: "Learned, worst size vs LRU", v: `${worst > 0 ? "+" : ""}${worst.toFixed(1)}%`, n: "safety check", cls: worst <= 1 ? "good" : "bad" });
+  }
+  const avgVs = Object.entries(byPol).filter(([p]) => p !== "OPT" && p !== "LRU").map(([p, rs]) => [p, mean(rs.map((r) => r.vs_lru_pct))]).sort((a, b) => a[1] - b[1]);
+  if (avgVs.length) kp.push({ l: "Best online policy here", v: avgVs[0][0], n: `${avgVs[0][1].toFixed(1)}% vs LRU` });
+  if (byPol.OPT) kp.push({ l: "OPT bound (needs the future)", v: `${mean(byPol.OPT.map((r) => r.vs_lru_pct)).toFixed(1)}%`, n: "best possible vs LRU" });
+  $("res-kpis").innerHTML = kp.map((k) => `<div class="kpi"><span class="l">${esc(k.l)}</span><span class="v ${k.cls || ""}">${esc(k.v)}</span><span class="n">${esc(k.n)}</span></div>`).join("");
+  renderLines(run); renderBars(); renderTable(run);
+}
+function renderLines(run) {
+  const W = 560, H = 300, m = { l: 48, r: 14, t: 10, b: 36 };
+  const sizes = run.frames, pols = run.policies;
+  const rate = (p, f) => (run.rows.find((r) => r.policy === p && r.capacity === f) || {}).fault_rate;
+  const vals = run.rows.map((r) => r.fault_rate), ymax = Math.min(1, Math.max(...vals) * 1.08), ymin = Math.max(0, Math.min(...vals) * 0.92);
+  const lx = (f) => sizes.length === 1 ? (m.l + W - m.r) / 2 : m.l + (W - m.l - m.r) * (Math.log(f) - Math.log(sizes[0])) / (Math.log(sizes[sizes.length - 1]) - Math.log(sizes[0]));
+  const ly = (v) => m.t + (H - m.t - m.b) * (1 - (v - ymin) / Math.max(ymax - ymin, 1e-9));
+  let g = "";
+  for (let i = 0; i <= 4; i++) { const v = ymin + (ymax - ymin) * i / 4; g += `<line x1="${m.l}" x2="${W - m.r}" y1="${ly(v)}" y2="${ly(v)}" stroke="var(--grid)"/><text x="${m.l - 6}" y="${ly(v)}" text-anchor="end" dominant-baseline="central" font-size="11" fill="var(--muted)">${(100 * v).toFixed(0)}%</text>`; }
+  sizes.forEach((f) => (g += `<text x="${lx(f)}" y="${H - m.b + 18}" text-anchor="middle" font-size="11" fill="var(--muted)">${fmtN(f)}</text>`));
+  g += `<text x="${(m.l + W - m.r) / 2}" y="${H - 4}" text-anchor="middle" font-size="11" fill="var(--ink-2)">memory frames</text>`;
+  for (const p of pols) {
+    const pts = sizes.map((f) => [lx(f), ly(rate(p, f))]);
+    const dash = p === "OPT" ? ' stroke-dasharray="5 4"' : "";
+    g += `<polyline points="${pts.map((q) => q.join(",")).join(" ")}" fill="none" stroke="${COLORS[p]}" stroke-width="${p === "Learned" ? 2.6 : 1.8}"${dash} stroke-linejoin="round"/>`;
+    sizes.forEach((f, i) => (g += `<circle cx="${pts[i][0]}" cy="${pts[i][1]}" r="4" fill="${COLORS[p]}" stroke="var(--surface)" stroke-width="2" data-tip="${p} · ${fmtN(f)} frames: ${(100 * rate(p, f)).toFixed(2)}% faults"/>`));
+  }
+  $("res-chart").innerHTML = `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Fault rate against memory size">${g}</svg><div class="tip" hidden></div>`;
+  $("res-legend").innerHTML = pols.map((p) => `<span><i style="background:${COLORS[p]}"></i>${p}</span>`).join("");
+  hookTips($("res-chart"));
+}
+function renderBars() {
+  const run = currentRunDoc; if (!run) return;
+  const f = +$("res-size").value;
+  const rows = run.rows.filter((r) => r.capacity === f && r.policy !== "LRU").sort((a, b) => a.vs_lru_pct - b.vs_lru_pct);
+  const W = 560, rowH = 26, H = rows.length * rowH + 24, m = { l: 80, r: 60 };
+  const ext = Math.max(5, ...rows.map((r) => Math.abs(r.vs_lru_pct)));
+  const x0 = m.l + (W - m.l - m.r) / 2, sx = (W - m.l - m.r) / 2 / ext;
+  let g = `<line x1="${x0}" x2="${x0}" y1="0" y2="${H - 20}" stroke="var(--line)"/>`;
+  rows.forEach((r, i) => {
+    const y = i * rowH + 4, v = r.vs_lru_pct, w = Math.abs(v) * sx, x = v < 0 ? x0 - w : x0;
+    g += `<text x="${m.l - 8}" y="${y + 9}" text-anchor="end" dominant-baseline="central" font-size="12" fill="var(--ink)">${r.policy}</text>`;
+    g += `<rect x="${x}" y="${y}" width="${Math.max(w, 1)}" height="18" rx="3" fill="${COLORS[r.policy]}" data-tip="${r.policy}: ${fmtN(r.faults)} faults"/>`;
+    g += `<text x="${v < 0 ? x - 6 : x + w + 6}" y="${y + 9}" text-anchor="${v < 0 ? "end" : "start"}" dominant-baseline="central" font-size="12" fill="var(--ink-2)">${v > 0 ? "+" : ""}${v.toFixed(1)}%</text>`;
+  });
+  g += `<text x="${x0 - 6}" y="${H - 4}" text-anchor="end" font-size="11" fill="var(--muted)">fewer faults than LRU</text><text x="${x0 + 6}" y="${H - 4}" font-size="11" fill="var(--muted)">more</text>`;
+  $("res-bars").innerHTML = `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Faults relative to LRU">${g}</svg><div class="tip" hidden></div>`;
+  hookTips($("res-bars"));
+}
+function renderTable(run) {
+  const best = {};
+  run.rows.forEach((r) => { if (r.policy !== "OPT" && (best[r.capacity] === undefined || r.faults < best[r.capacity])) best[r.capacity] = r.faults; });
+  $("res-table").innerHTML = `<thead><tr><th>Frames</th><th>Policy</th><th class="r">Faults</th><th class="r">Fault rate</th><th class="r">vs LRU</th><th class="r">LRU→OPT gap closed</th><th class="r">Decision time</th><th class="r">Run time</th></tr></thead><tbody>` +
+    run.rows.map((r) => `<tr><td class="r">${fmtN(r.capacity)}</td><td>${r.policy}${r.policy !== "OPT" && r.faults === best[r.capacity] ? ' <span class="chip">best</span>' : ""}</td>
+      <td class="r">${fmtN(r.faults)}</td><td class="r">${(100 * r.fault_rate).toFixed(2)}%</td>
+      <td class="r ${r.vs_lru_pct < 0 ? "good" : r.vs_lru_pct > 0 ? "bad" : ""}">${r.policy === "LRU" ? "–" : (r.vs_lru_pct > 0 ? "+" : "") + r.vs_lru_pct.toFixed(1) + "%"}</td>
+      <td class="r">${r.gap_closed_pct == null || r.policy === "LRU" ? "–" : r.gap_closed_pct.toFixed(0) + "%"}</td>
+      <td class="r">${r.decisions ? r.decision_us.toFixed(1) + " µs" : "–"}</td><td class="r">${r.seconds.toFixed(1)} s</td></tr>`).join("") + "</tbody>";
+}
+function hookTips(box) {
+  const tip = box.querySelector(".tip");
+  box.addEventListener("mousemove", (e) => {
+    const el = e.target.closest("[data-tip]");
+    if (!el) { tip.hidden = true; return; }
+    const b = box.getBoundingClientRect();
+    tip.textContent = el.dataset.tip; tip.hidden = false;
+    tip.style.left = Math.min(b.width - 220, e.clientX - b.left + 12) + "px"; tip.style.top = (e.clientY - b.top - 34) + "px";
+  });
+  box.addEventListener("mouseleave", () => (tip.hidden = true));
+}
+
+// --------------------------------------------------------------- start
+(async function start() {
+  await refresh();
+  if (!state.tools.valgrind || !state.tools.strace) {
+    const missing = Object.entries(state.tools).filter(([, ok]) => !ok).map(([k]) => k);
+    $("tool-note").hidden = false;
+    $("tool-note").textContent = `Not installed here: ${missing.join(" and ")}. On Linux or WSL install with "sudo apt install valgrind strace". On Windows, record file activity with Process Monitor (File > Save > CSV) and import it on the right.`;
+    if (!state.tools.valgrind) $("rec-tool").value = "strace";
+  }
+  if (state.runs.length) currentRun = state.runs[0].id;
+  setInterval(refresh, 1000);
+})();
+</script>
+</body>
+</html>
