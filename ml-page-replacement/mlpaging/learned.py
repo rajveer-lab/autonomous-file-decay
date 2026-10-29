@@ -15,7 +15,7 @@ from __future__ import annotations
 import heapq
 import math
 import random
-from dataclasses import dataclass
+from collections import OrderedDict
 
 import numpy as np
 
@@ -133,7 +133,11 @@ class LogReg:
 
 
 class Tree:
-    """A shallow CART tree (Gini splits); leaves hold P(label = 1)."""
+    """A shallow CART tree with variance-reduction splits.
+
+    On 0/1 labels the splits are the same as Gini splits and a leaf holds
+    P(label = 1). On real-valued targets it is a regression tree.
+    """
     kind = "tree"
 
     def __init__(self, depth: int = 4, min_leaf: int = 200, bins: int = 32):
@@ -150,25 +154,26 @@ class Tree:
         idx = len(self.nodes)
         self.nodes.append(None)
         best = None
-        if d < self.depth and len(y) >= 2 * self.min_leaf and 0 < y.mean() < 1:
-            n, pos = len(y), y.sum()
-            parent = 1 - (pos / n) ** 2 - (1 - pos / n) ** 2
+        if d < self.depth and len(y) >= 2 * self.min_leaf and y.var() > 0:
+            n, sy, syy = len(y), y.sum(), (y * y).sum()
+            parent = syy / n - (sy / n) ** 2
             for f in range(X.shape[1]):
                 xs = X[:, f]
                 cuts = np.unique(np.quantile(xs, np.linspace(0, 1, self.bins + 1)[1:-1]))
                 for c in cuts:
                     left = xs <= c
-                    nl = left.sum()
-                    if nl < self.min_leaf or n - nl < self.min_leaf:
+                    nl = int(left.sum())
+                    nr = n - nl
+                    if nl < self.min_leaf or nr < self.min_leaf:
                         continue
-                    pl = y[left].sum()
-                    pr = pos - pl
-                    gl = 1 - (pl / nl) ** 2 - (1 - pl / nl) ** 2
-                    gr = 1 - (pr / (n - nl)) ** 2 - (1 - pr / (n - nl)) ** 2
-                    gain = parent - (nl * gl + (n - nl) * gr) / n
+                    yl = y[left]
+                    sl, sll = yl.sum(), (yl * yl).sum()
+                    vl = sll / nl - (sl / nl) ** 2
+                    vr = (syy - sll) / nr - ((sy - sl) / nr) ** 2
+                    gain = parent - (nl * vl + nr * vr) / n
                     if best is None or gain > best[0]:
                         best = (gain, f, c)
-        if best is None or best[0] <= 1e-6:
+        if best is None or best[0] <= 1e-7:
             self.nodes[idx] = (-1, float(y.mean()) if len(y) else 0.5)
             return idx
         _, f, c = best
@@ -206,12 +211,14 @@ class Tree:
 
 # ------------------------------------------------------------ training data
 
-def opt_dataset(trace: np.ndarray, c: int, horizon: float, k: int = 16,
+def opt_dataset(trace: np.ndarray, c: int, k: int = 16,
                 max_rows: int = 20_000, seed: int = 0):
-    """Replay ``trace`` under OPT with ``c`` frames and label sampled pages.
+    """Replay ``trace`` under OPT with ``c`` frames and record sampled pages.
 
-    Returns (X, y). y = 1 when the page's next use is more than horizon * c
-    accesses away. Features only use accesses before the eviction time.
+    Returns (X, D): feature rows built only from accesses before the
+    eviction time, and D = (next use - now) / c, which only OPT knows.
+    Labels are made from D: ``D > horizon`` for the classifier, or
+    ``log1p(D)`` for the regression tree.
     """
     rng = random.Random(seed)
     nxt = next_use(trace)
@@ -220,7 +227,6 @@ def opt_dataset(trace: np.ndarray, c: int, horizon: float, k: int = 16,
     meta = Meta(int(trace.max()) + 1)
     resident, pos, cur = [], {}, {}
     heap = []
-    H = horizon * c
     # sample roughly max_rows rows spread over the whole trace
     evictions_est = max(1, n // 2)
     stride = max(1, (evictions_est * min(k, c)) // max_rows)
@@ -231,7 +237,7 @@ def opt_dataset(trace: np.ndarray, c: int, horizon: float, k: int = 16,
             if ev % stride == 0:
                 sample = rng.sample(resident, min(k, len(resident)))
                 Xs.append(meta.features(sample, t, c))
-                ys.append([1.0 if cur[q] - t > H else 0.0 for q in sample])
+                ys.append([min(cur[q] - t, n) / c for q in sample])
             ev += 1
             while True:
                 neg, v = heapq.heappop(heap)
@@ -259,29 +265,38 @@ def opt_dataset(trace: np.ndarray, c: int, horizon: float, k: int = 16,
 
 # ------------------------------------------------------------ online policy
 
-@dataclass
-class LearnedConfig:
-    k: int = 16
-    threshold: float = 0.5
-    horizon: float = 1.0
-    model: str = "tree"
-
-
 class LearnedPolicy(Policy):
-    metadata_bytes = METADATA_BYTES
+    """Sampled learned eviction with two safety nets.
 
-    def __init__(self, model, k=16, threshold=0.5, seed=0, name="Learned"):
+    1. Confidence fallback: if the best score in the sample is below the
+       threshold, evict the least recently used page instead.
+    2. Regret guard (the LeCaR mechanism [14], with the model and LRU as the
+       two experts): pages evicted by each expert go into that expert's
+       history of size C. A fault on a page in the model's history means the
+       model evicted something still needed, so LRU gains weight, and the
+       other way round. Each eviction follows an expert chosen by weight.
+       With ``guard=False`` every eviction follows the model.
+    """
+    metadata_bytes = METADATA_BYTES + 16    # features + recency-list pointers
+
+    def __init__(self, model, k=16, threshold=0.5, seed=0, name="Learned",
+                 guard=True, learning_rate=0.45):
         self.model, self.k, self.threshold, self.seed = model, k, threshold, seed
-        self.name = name
+        self.name, self.guard, self.lr = name, guard, learning_rate
 
     def reset(self, capacity, trace):
         super().reset(capacity, trace)
         self.rng = random.Random(self.seed)
         self.meta = Meta(int(trace.max()) + 1)
         self.resident, self.pos = [], {}
+        self.order = OrderedDict()               # resident pages, LRU first
+        self.h_model, self.h_lru = OrderedDict(), OrderedDict()
+        self.w_model = 1.0 if not self.guard else 0.5
+        self.discount = 0.005 ** (1 / capacity)
         self.fallbacks = 0
+        self.model_evictions = 0
 
-    def _evict(self, t):
+    def _model_victim(self, t):
         res, k = self.resident, min(self.k, len(self.resident))
         sample = [res[i] for i in self.rng.sample(range(len(res)), k)]
         row, score, c = self.meta.row, self.model.score, self.c
@@ -289,25 +304,55 @@ class LearnedPolicy(Policy):
         j = max(range(k), key=scores.__getitem__)
         if scores[j] < self.threshold:
             self.fallbacks += 1
-            last = self.meta.last
-            v = min(sample, key=last.__getitem__)
+            return None
+        return sample[j]
+
+    def _evict(self, t):
+        v = None
+        if not self.guard or self.rng.random() < self.w_model:
+            v = self._model_victim(t)
+            hist = self.h_model
+        if v is None:
+            v = next(iter(self.order))
+            hist = self.h_lru
         else:
-            v = sample[j]
+            self.model_evictions += 1
+        if self.guard:
+            hist[v] = t
+            if len(hist) > self.c:
+                hist.popitem(last=False)
+        del self.order[v]
         i = self.pos.pop(v)
-        tail = res.pop()
+        tail = self.resident.pop()
         if tail != v:
-            res[i] = tail
+            self.resident[i] = tail
             self.pos[tail] = i
         return v
 
+    def _regret(self, page, t):
+        for hist, model_was_wrong in ((self.h_model, True), (self.h_lru, False)):
+            if page in hist:
+                reward = self.discount ** (t - hist.pop(page))
+                w_m, w_l = self.w_model, 1 - self.w_model
+                if model_was_wrong:
+                    w_l *= math.exp(self.lr * reward)
+                else:
+                    w_m *= math.exp(self.lr * reward)
+                self.w_model = w_m / (w_m + w_l)
+                return
+
     def access(self, page, t):
         if page in self.pos:
+            self.order.move_to_end(page)
             self.meta.touch(page, t)
             return True
+        if self.guard:
+            self._regret(page, t)
         if len(self.resident) >= self.c:
             self._timed_evict(t)
         self.pos[page] = len(self.resident)
         self.resident.append(page)
+        self.order[page] = None
         self.meta.touch(page, t)
         return False
 

@@ -10,7 +10,7 @@ from collections import defaultdict
 import numpy as np
 
 ORDER = ["FIFO", "LRU", "LFU", "CLOCK", "ARC", "LeCaR", "SIEVE", "S3-FIFO",
-         "SampledLRU-16", "Learned", "OPT"]
+         "SampledLRU-16", "Learned (no guard)", "Learned", "OPT"]
 # validated categorical palette (light mode), assigned in fixed order
 PALETTE = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#6250d6"]
 PLOT = ["LRU", "CLOCK", "ARC", "LeCaR", "S3-FIFO", "Learned"]
@@ -101,8 +101,10 @@ def main(out="results", figures="figures"):
     md += ["", "## Learned policy", "",
            f"- Model: {model['kind']}, {model['params']} parameters ({model['bytes']} bytes as float32), "
            f"trained on {model['train_rows']} OPT-labelled rows in {model['train_seconds']} s.",
-           f"- Label horizon H = {model['horizon']} × memory size; sample k = {model['k']} pages per fault; "
-           f"fallback to LRU-in-sample when the best score is below {model['threshold']}.",
+           f"- Target: {model['target']}; sample k = {model['k']} pages per fault; "
+           f"evict LRU instead when the best score is below {model['threshold']:.3f}.",
+           "- Regret guard on: the model and LRU are weighted by how often their evicted pages come back (LeCaR mechanism). "
+           "`Learned (no guard)` is the same model without it.",
            f"- Chosen on validation traces only; the test traces were not used for any choice.", ""]
 
     abl_path = os.path.join(out, "ablation.csv")

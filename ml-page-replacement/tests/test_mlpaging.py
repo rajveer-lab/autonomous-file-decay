@@ -18,7 +18,8 @@ def all_policies():
     X = rng.random((400, len(L.FEATURES)))
     y = (rng.random(400) < 0.5).astype(float)
     return P.baselines() + [P.SampledLRU(4), L.LearnedPolicy(L.LogReg().fit(X, y).compile(), k=4),
-                            L.LearnedPolicy(L.Tree(min_leaf=20).fit(X, y).compile(), k=4)]
+                            L.LearnedPolicy(L.Tree(min_leaf=20).fit(X, y).compile(), k=4),
+                            L.LearnedPolicy(L.LogReg().fit(X, y).compile(), k=4, guard=False)]
 
 
 def test_textbook_string():
@@ -122,10 +123,12 @@ def test_row_matches_vectorised_features():
 
 def test_opt_dataset_labels_match_next_use():
     tr = T.zipf(n_pages=400, length=6000, seed=5).pages
-    X, y = L.opt_dataset(tr, 30, horizon=1.0, max_rows=2000)
-    assert len(X) == len(y) > 0
+    c = 30
+    X, D = L.opt_dataset(tr, c, max_rows=2000)
+    assert len(X) == len(D) > 0
     assert X.shape[1] == len(L.FEATURES)
-    assert set(np.unique(y)) <= {0.0, 1.0}
+    assert (D > 0).all()                       # next use is always in the future
+    assert (D * c <= len(tr)).all()
 
 
 def test_models_score_like_predict():
@@ -141,8 +144,8 @@ def test_models_score_like_predict():
 
 def test_learned_policy_is_deterministic():
     tr = T.scan_hot(hot=100, length=8000, scan_every=500, scan_len=200, seed=1).pages
-    X, y = L.opt_dataset(tr, 40, 1.0)
-    m = L.LogReg().fit(X, y).compile()
+    X, D = L.opt_dataset(tr, 40)
+    m = L.LogReg().fit(X, (D > 1).astype(float)).compile()
     r1 = simulate(L.LearnedPolicy(m, seed=3), tr, 40)["faults"]
     r2 = simulate(L.LearnedPolicy(m, seed=3), tr, 40)["faults"]
     assert r1 == r2
@@ -165,3 +168,14 @@ def test_generators_are_reproducible():
     assert len(T.matmul(n=32, rows=2)) > 0
     assert len(T.mergesort(n=1 << 10)) > 0
     assert len(T.bfs(n=500)) > 0
+
+
+def test_guard_keeps_learned_close_to_lru_on_merge_sort():
+    train = T.zipf(n_pages=2000, length=20000, seed=1).pages
+    X, D = L.opt_dataset(train, 60)
+    m = L.Tree().fit(X, np.log1p(D)).compile()
+    tr = T.mergesort(n=1 << 11, elem=256, seed=2).pages
+    c = 20
+    lru = simulate(P.LRU(), tr, c)["faults"]
+    guarded = simulate(L.LearnedPolicy(m, threshold=0.0), tr, c)["faults"]
+    assert guarded <= 1.05 * lru
